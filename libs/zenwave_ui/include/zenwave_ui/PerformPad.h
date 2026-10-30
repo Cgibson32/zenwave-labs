@@ -158,7 +158,7 @@ public:
         {
             g.setColour(Palette::dim.withAlpha(0.6f));
             g.setFont(juce::Font(juce::FontOptions(8.5f, juce::Font::bold)));
-            g.drawText("THROW", r.withTrimmedTop(4.0f).withHeight(12.0f), juce::Justification::centred);
+            g.drawText("THROW", juce::Rectangle<float>(in.getX() + 12.0f, in.getBottom() - 12.0f, 50.0f, 12.0f), juce::Justification::centredLeft);
         }
     }
 

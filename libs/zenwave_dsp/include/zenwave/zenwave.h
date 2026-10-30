@@ -8,3 +8,4 @@
 #include "SpaceReverb.h"
 #include "DriftEngine.h"
 #include "UmbraEngine.h"
+#include "CoreEngine.h"

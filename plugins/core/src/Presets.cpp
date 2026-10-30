@@ -1,0 +1,84 @@
+#include "Presets.h"
+#include "PluginProcessor.h"
+#include <zenwave_ui/Modulation.h>
+#include <zenwave_ui/ProcessorHelpers.h>
+
+namespace Presets
+{
+    // characters: 0 Tape, 1 Tube, 2 Fold, 3 Rectify, 4 Crush
+    // name, category, drive, heat, focus, width, mix, outDb, lowX, highX, subLock, low{ch,drv,mix,gain}, mid{...}, high{...}
+    static const Preset kPresets[] = {
+        { "Init",                 "Init",    0.40f, 0.30f,  0.00f, 1.00f, 1.00f, 0.0f, 150.0f, 3500.0f, true,  { 0, 0.30f, 1.0f, 0.0f }, { 0, 0.30f, 1.0f, 0.0f }, { 0, 0.30f, 1.0f, 0.0f } },
+
+        // --- Bass ---
+        { "Growl Glue",           "Bass",    0.55f, 0.45f,  0.00f, 1.00f, 1.00f, 0.0f, 120.0f, 2500.0f, true,  { 0, 0.20f, 1.0f, 0.0f }, { 1, 0.65f, 1.0f, 0.5f }, { 0, 0.45f, 0.9f, 0.0f } },
+        { "Riddim Crunch",        "Bass",    0.70f, 0.60f,  0.00f, 1.00f, 1.00f, 0.0f, 100.0f, 1800.0f, true,  { 0, 0.10f, 1.0f, 0.0f }, { 3, 0.75f, 1.0f, 1.0f }, { 2, 0.50f, 0.8f, 0.0f } },
+        { "Wonky Fuzz",           "Bass",    0.80f, 0.70f,  0.00f, 1.10f, 1.00f, 0.0f, 140.0f, 3000.0f, true,  { 0, 0.15f, 1.0f, 0.0f }, { 2, 0.85f, 1.0f, 0.0f }, { 1, 0.60f, 1.0f, 1.0f } },
+        { "Sub-Safe Smash",       "Bass",    0.90f, 0.50f,  0.00f, 1.00f, 1.00f, 0.0f, 90.0f,  2200.0f, true,  { 0, 0.00f, 1.0f, 0.0f }, { 0, 0.95f, 1.0f, 0.0f }, { 0, 0.90f, 1.0f, 0.0f } },
+        { "Neuro Bite",           "Bass",    0.75f, 0.80f,  0.00f, 1.00f, 1.00f, 0.0f, 160.0f, 4500.0f, true,  { 1, 0.25f, 1.0f, 0.0f }, { 2, 0.70f, 1.0f, 0.0f }, { 3, 0.80f, 1.0f, 2.0f } },
+        { "Halftime Heat",        "Bass",    0.50f, 0.65f,  0.00f, 1.00f, 0.80f, 0.0f, 130.0f, 3200.0f, true,  { 1, 0.30f, 1.0f, 0.0f }, { 1, 0.55f, 1.0f, 0.0f }, { 0, 0.40f, 0.7f, -1.0f } },
+        { "808 Tube Glue",        "Bass",    0.45f, 0.55f,  0.00f, 1.00f, 1.00f, 0.0f, 70.0f,  1200.0f, false, { 1, 0.35f, 0.8f, 0.0f }, { 1, 0.50f, 1.0f, 0.0f }, { 0, 0.30f, 0.6f, 0.0f } },
+
+        // --- Vocals ---
+        { "Vocal Warmth",         "Vocals",  0.35f, 0.50f,  0.00f, 1.00f, 1.00f, 0.0f, 180.0f, 4000.0f, true,  { 0, 0.20f, 1.0f, 0.0f }, { 1, 0.40f, 1.0f, 0.0f }, { 0, 0.25f, 0.8f, 0.5f } },
+        { "Radio Vox",            "Vocals",  0.60f, 0.40f,  0.00f, 0.80f, 1.00f, 0.0f, 300.0f, 3000.0f, true,  { 0, 0.00f, 0.0f, -12.0f }, { 3, 0.70f, 1.0f, 2.0f }, { 0, 0.30f, 0.3f, -6.0f } },
+        { "Grit Vox (Parallel)",  "Vocals",  0.85f, 0.70f, -0.60f, 1.00f, 0.35f, 0.0f, 200.0f, 3500.0f, true,  { 0, 0.30f, 1.0f, 0.0f }, { 2, 0.80f, 1.0f, 0.0f }, { 1, 0.60f, 1.0f, 0.0f } },
+
+        // --- Drums ---
+        { "Drum Bus Glue",        "Drums",   0.30f, 0.35f,  0.00f, 1.00f, 1.00f, 0.0f, 110.0f, 4000.0f, true,  { 0, 0.25f, 1.0f, 0.0f }, { 0, 0.35f, 1.0f, 0.0f }, { 0, 0.30f, 1.0f, 0.0f } },
+        { "Snare Crack",          "Drums",   0.65f, 0.60f,  0.00f, 1.00f, 1.00f, 0.0f, 200.0f, 2500.0f, true,  { 0, 0.10f, 1.0f, 0.0f }, { 1, 0.60f, 1.0f, 1.0f }, { 2, 0.55f, 0.8f, 1.5f } },
+        { "Kick Punch Tape",      "Drums",   0.50f, 0.30f,  0.00f, 1.00f, 1.00f, 0.0f, 80.0f,  1500.0f, false, { 0, 0.55f, 1.0f, 0.0f }, { 0, 0.45f, 1.0f, 0.0f }, { 0, 0.20f, 0.6f, 0.0f } },
+        { "Hat Air Fuzz",         "Drums",   0.55f, 0.50f,  0.80f, 1.30f, 1.00f, 0.0f, 250.0f, 6000.0f, true,  { 0, 0.00f, 0.0f, 0.0f }, { 0, 0.20f, 0.5f, 0.0f }, { 2, 0.60f, 1.0f, 1.0f } },
+
+        // --- Master / Bus ---
+        { "Glue Tape",            "Master",  0.25f, 0.25f,  0.00f, 1.00f, 1.00f, 0.0f, 120.0f, 5000.0f, true,  { 0, 0.15f, 1.0f, 0.0f }, { 0, 0.25f, 1.0f, 0.0f }, { 0, 0.20f, 1.0f, 0.0f } },
+        { "Loudness Heat",        "Master",  0.45f, 0.45f,  0.00f, 1.00f, 1.00f, 0.0f, 100.0f, 4500.0f, true,  { 0, 0.20f, 1.0f, 0.0f }, { 1, 0.45f, 1.0f, 0.0f }, { 1, 0.40f, 1.0f, 0.5f } },
+        { "Wide Air",             "Master",  0.30f, 0.60f,  0.90f, 1.35f, 1.00f, 0.0f, 150.0f, 7000.0f, true,  { 0, 0.00f, 1.0f, 0.0f }, { 0, 0.15f, 1.0f, 0.0f }, { 1, 0.45f, 1.0f, 1.0f } },
+
+        // --- FX ---
+        { "Total Fold",           "FX",      1.00f, 0.80f,  0.00f, 1.00f, 1.00f, 0.0f, 150.0f, 3500.0f, true,  { 0, 0.20f, 1.0f, 0.0f }, { 2, 1.00f, 1.0f, 0.0f }, { 2, 1.00f, 1.0f, 0.0f } },
+        { "Bit Storm",            "FX",      0.80f, 0.30f,  0.00f, 1.00f, 1.00f, 0.0f, 120.0f, 3000.0f, true,  { 0, 0.10f, 1.0f, 0.0f }, { 4, 0.75f, 1.0f, 0.0f }, { 4, 0.90f, 1.0f, 0.0f } },
+        { "Broken Speaker",       "FX",      0.90f, 1.00f,  0.00f, 0.70f, 1.00f, 0.0f, 350.0f, 2500.0f, true,  { 0, 0.00f, 0.0f, -18.0f }, { 3, 0.95f, 1.0f, 3.0f }, { 2, 0.70f, 0.5f, -6.0f } },
+        { "Rectifier",            "FX",      0.70f, 0.90f,  0.00f, 1.00f, 1.00f, 0.0f, 150.0f, 3500.0f, true,  { 3, 0.40f, 1.0f, 0.0f }, { 3, 0.80f, 1.0f, 0.0f }, { 3, 0.80f, 1.0f, 0.0f } },
+    };
+
+    int count() { return int(std::size(kPresets)); }
+    const Preset& get(int index) { return kPresets[juce::jlimit(0, count() - 1, index)]; }
+    juce::String name(int index) { return get(index).name; }
+    juce::String category(int index) { return get(index).category; }
+
+    static void setParam(juce::AudioProcessorValueTreeState& apvts, const juce::String& id, float plainValue)
+    {
+        if (auto* p = apvts.getParameter(id))
+        {
+            const float norm = p->convertTo0to1(plainValue);
+            p->beginChangeGesture(); p->setValueNotifyingHost(norm); p->endChangeGesture();
+        }
+    }
+
+    void apply(int index, juce::AudioProcessorValueTreeState& apvts)
+    {
+        const auto& p = get(index);
+        setParam(apvts, ParamIDs::drive, p.drive);   setParam(apvts, ParamIDs::heat, p.heat);     setParam(apvts, ParamIDs::focus, p.focus);
+        setParam(apvts, ParamIDs::width, p.width);   setParam(apvts, ParamIDs::mix, p.mix);       setParam(apvts, ParamIDs::output, p.outputDb);
+        setParam(apvts, ParamIDs::lowX, p.lowX);     setParam(apvts, ParamIDs::highX, p.highX);   setParam(apvts, ParamIDs::subLock, p.subLock ? 1.0f : 0.0f);
+        const Band* bands[3] = { &p.low, &p.mid, &p.high };
+        for (int b = 0; b < 3; ++b)
+        {
+            setParam(apvts, ParamIDs::bandChar(b), float(bands[b]->character));
+            setParam(apvts, ParamIDs::bandDrive(b), bands[b]->drive);
+            setParam(apvts, ParamIDs::bandMix(b), bands[b]->mix);
+            setParam(apvts, ParamIDs::bandGain(b), bands[b]->gainDb);
+        }
+        setParam(apvts, ParamIDs::power, 1.0f);
+        setParam(apvts, ParamIDs::lowCut, 20.0f); setParam(apvts, ParamIDs::highCut, 20000.0f);
+        setParam(apvts, ParamIDs::lowSlope, 1.0f); setParam(apvts, ParamIDs::highSlope, 1.0f); setParam(apvts, ParamIDs::tilt, 0.0f);
+
+        // Factory motion (targets 1-based: Drive=1 Heat Focus Width Mix LowX HighX LowDrive MidDrive HighDrive LowCut HighCut Tilt=13)
+        const juce::String n(p.name);
+        if (n == "Growl Glue")     { zwui::setModSlot(apvts, 0, 3, 9, 0.35f); }                                   // env -> mid drive: growls bite harder on hits
+        if (n == "Neuro Bite")     { zwui::setLfo(apvts, 0, 5, true, 2, 1.0f); zwui::setModSlot(apvts, 0, 1, 7, 0.25f); } // S&H 1/16 on the high crossover
+        if (n == "Wonky Fuzz")     { zwui::setLfo(apvts, 0, 6, true, 8, 1.0f); zwui::setModSlot(apvts, 0, 1, 2, 0.30f); }
+        if (n == "Hat Air Fuzz")   { zwui::setModSlot(apvts, 0, 3, 1, -0.30f); }                                  // env -> drive down on hits = keeps transients
+    }
+}

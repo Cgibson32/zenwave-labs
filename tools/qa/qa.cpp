@@ -11,11 +11,11 @@ static int failures = 0;
 #define QA_CHECK(cond, ...) do { if (!(cond)) { std::printf("FAIL: "); std::printf(__VA_ARGS__); std::printf("\n"); ++failures; } } while (0)
 
 struct Stats { float peak = 0; bool finite = true; int clicks = 0; };
-static float d2avg[2] = { 0.01f, 0.01f }; static float hist[2][2] = {{0,0},{0,0}};
-
+static float hist[2][2] = {{0,0},{0,0}};
 // Click-free test signal: phase-continuous kick with pitch envelope, gated lead/hat with
 // 2 ms fades, so any click the detector finds is the plugin's, not the source's.
 static double kickPhase = 0.0, leadPhase = 0.0, hatPhase = 0.0;
+static bool continuousSignal = false;   // distortion plugins: no gates (a clipper turns any fade into a step)
 static float smoothGate(double pos, double len, double fade = 0.002)
 {
     if (pos < 0 || pos > len) return 0.0f;
@@ -25,6 +25,19 @@ static float smoothGate(double pos, double len, double fade = 0.002)
 }
 static void fill(juce::AudioBuffer<float>& b, double& t, double sr)
 {
+    if (continuousSignal)
+    {
+        for (int i = 0; i < b.getNumSamples(); ++i, t += 1.0 / sr)
+        {
+            kickPhase += 2 * M_PI * 48.0 / sr; if (kickPhase > 2 * M_PI) kickPhase -= 2 * M_PI;
+            leadPhase += 2 * M_PI * 660.0 / sr; if (leadPhase > 2 * M_PI) leadPhase -= 2 * M_PI;
+            hatPhase  += 2 * M_PI * 9000.0 / sr; if (hatPhase  > 2 * M_PI) hatPhase  -= 2 * M_PI;
+            const float swell = 0.55f + 0.45f * float(std::sin(2 * M_PI * 0.3 * t));   // slow level swell exercises auto-gain
+            const float x = (0.5f * float(std::sin(kickPhase)) + 0.2f * float(std::sin(leadPhase)) + 0.08f * float(std::sin(hatPhase))) * swell;
+            b.setSample(0, i, x); b.setSample(1, i, x * 0.85f);
+        }
+        return;
+    }
     for (int i = 0; i < b.getNumSamples(); ++i, t += 1.0 / sr)
     {
         const double beatPos = std::fmod(t, 0.5);
@@ -40,28 +53,39 @@ static void fill(juce::AudioBuffer<float>& b, double& t, double sr)
     }
 }
 
+// A click is an *isolated* step: the second difference in one 5 ms window far above what the
+// rest of the run does. Steady hard-clipped waveforms (a saturator doing its job) have steps in
+// every window, so they are not flagged; a single discontinuity is.
 static Stats run(juce::AudioProcessor& p, int blocks, double& t, double sr, juce::AudioBuffer<float>& b, juce::MidiBuffer& mb, float* lastOut)
 {
     Stats s;
+    const int win = 240;
+    std::vector<float> winMax[2]; float cur[2] = { 0, 0 }; int cnt = 0;
     for (int k = 0; k < blocks; ++k)
     {
         fill(b, t, sr);
         p.processBlock(b, mb);
-        for (int c = 0; c < 2; ++c)
+        for (int i = 0; i < b.getNumSamples(); ++i)
         {
-            const float* d = b.getReadPointer(c);
-            for (int i = 0; i < b.getNumSamples(); ++i)
+            for (int c = 0; c < 2; ++c)
             {
-                if (! std::isfinite(d[i])) s.finite = false;
-                s.peak = std::max(s.peak, std::fabs(d[i]));
-                // click = second difference far above its running average (a step, not a loud tone)
-                const float d2 = std::fabs(d[i] - 2.0f * hist[c][0] + hist[c][1]);
-                if (d2 > 0.5f && d2 > 30.0f * d2avg[c]) ++s.clicks;   // a step, not a loud bright tone
-                d2avg[c] += (d2 - d2avg[c]) * 0.002f;
-                hist[c][1] = hist[c][0]; hist[c][0] = d[i];
+                const float v = b.getReadPointer(c)[i];
+                if (! std::isfinite(v)) s.finite = false;
+                s.peak = std::max(s.peak, std::fabs(v));
+                const float d2 = std::fabs(v - 2.0f * hist[c][0] + hist[c][1]);
+                cur[c] = std::max(cur[c], d2);
+                hist[c][1] = hist[c][0]; hist[c][0] = v;
             }
-            lastOut[c] = d[b.getNumSamples() - 1];
+            if (++cnt == win) { for (int c = 0; c < 2; ++c) { winMax[c].push_back(cur[c]); cur[c] = 0; } cnt = 0; }
         }
+        for (int c = 0; c < 2; ++c) lastOut[c] = b.getReadPointer(c)[b.getNumSamples() - 1];
+    }
+    for (int c = 0; c < 2; ++c)
+    {
+        if (winMax[c].size() < 4) continue;
+        auto sorted = winMax[c]; std::sort(sorted.begin(), sorted.end());
+        const float median = std::max(0.02f, sorted[sorted.size() / 2]);
+        for (float m : winMax[c]) if (m > 0.5f && m > 8.0f * median) ++s.clicks;
     }
     return s;
 }
@@ -75,7 +99,8 @@ int main()
     proc->prepareToPlay(sr, block);
     juce::AudioBuffer<float> b(2, block); juce::MidiBuffer mb; double t = 0; float last[2] = { 0, 0 };
 
-    std::printf("== %s: %d parameters, %d presets\n", proc->getName().toRawUTF8(), proc->getParameters().size(), proc->getNumPrograms());
+    continuousSignal = proc->getName().containsIgnoreCase("Core");
+    std::printf("== %s: %d parameters, %d presets%s\n", proc->getName().toRawUTF8(), proc->getParameters().size(), proc->getNumPrograms(), continuousSignal ? " (continuous test signal)" : "");
 
     // 1) Every preset: process 2 s, check sanity
     for (int pr = 0; pr < proc->getNumPrograms(); ++pr)

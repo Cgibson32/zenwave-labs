@@ -62,3 +62,7 @@ Drift (free) → Umbra (dark reverb, $49) → Halo (shimmer reverb, $49) → Cor
 - **ORBIT** - every ZenWave plugin with Orbit on shares one Freeze over a shared-memory bus; the button shows the peer count.
 - **LEARN** - listens to the dry input for 6 s and places Low Cut above your sub, High Cut where the top end ends (Umbra also sets Gravity).
 - Manual lives in the MANUAL chip, top right; everything has a tooltip.
+
+## CORE - multiband heat (v0.6)
+
+Three-band saturator for bass music. LR4 crossovers (drag the lines in the spectrum, or LEARN), per-band character (Tape / Tube / Fold / Rectify / Crush) with drive, mix and gain, SUB LOCK keeps the low band clean and mono, FOCUS distorts mid or side only, auto-gain per band so louder never fools you. 4x oversampled shapers, same shell as Drift/Umbra (presets, Warp, Motion matrix, perform pad = drive x mix, manual, tooltips). 22 presets.

@@ -1,0 +1,271 @@
+#pragma once
+// CORE: three-band saturator / distortion for bass music.
+//
+//   in → LR4 crossover (LOW | MID | HIGH) → per band: M/S focus → shaper (4x OS) → auto-gain
+//      → band mix/gain → sum → width → wet EQ → soft ceiling → mix with dry → output
+//
+// SUB LOCK keeps the low band clean and mono. Auto-gain matches each band's wet level to its
+// dry level so turning DRIVE up never fools you with loudness.
+
+#include "Utils.h"
+#include "Filters.h"
+#include <cmath>
+#include <array>
+
+namespace zw {
+
+struct CoreBand
+{
+    int   character = 0;    // 0 Tape, 1 Tube, 2 Fold, 3 Rectify, 4 Crush
+    float drive = 0.3f;     // 0..1
+    float mix   = 1.0f;     // 0..1
+    float gain  = 0.0f;     // dB
+};
+
+struct CoreParams
+{
+    float drive = 0.4f;     // 0..1 global, multiplies band drives
+    float heat  = 0.3f;     // 0..1 asymmetry / even harmonics + presence into the shaper
+    float focus = 0.0f;     // -1 mid only .. 0 both .. +1 side only
+    float width = 1.0f;     // 0..1.5
+    float mix   = 1.0f;     // 0..1
+    float output = 0.0f;    // dB
+    float lowX  = 150.0f;   // 40..400
+    float highX = 3500.0f;  // 1000..12000
+    bool  subLock = true;
+    CoreBand band[3];
+    // wet-path EQ
+    float lowCutHz = 20.0f, highCutHz = 20000.0f; int lowSlope = 1, highSlope = 1; float tilt = 0.0f;
+};
+
+// 4th-order Linkwitz-Riley crossover from two cascaded TPT 2nd-order Butterworth sections.
+// Returns LP and HP that sum flat (allpass).
+class CrossoverLR4
+{
+public:
+    void setSampleRate(double sr) noexcept { fs = sr; update(); }
+    void setCutoff(float hz) noexcept { fc = clampf(hz, 20.0f, float(fs * 0.45)); update(); }
+    void reset() noexcept { for (auto& s : st) s = {}; }
+    void process(float x, float& lp, float& hp) noexcept
+    {
+        float l1, h1; tick(st[0], x, l1, h1);
+        float l2, h2, l3, h3;
+        tick(st[1], l1, l2, h2);      // LP·LP
+        tick(st[2], h1, l3, h3);      // HP·HP
+        lp = l2; hp = h3;
+    }
+    // Allpass with the same phase as lp+hp (apply to other bands so everything stays aligned)
+    float allpass(float x) noexcept { float l, h; process(x, l, h); return l + h; }
+private:
+    struct S { float ic1 = 0, ic2 = 0; };
+    void tick(S& s, float v0, float& lp, float& hp) noexcept
+    {
+        const float v3 = v0 - s.ic2;
+        const float v1 = a1 * s.ic1 + a2 * v3;
+        const float v2 = s.ic2 + a2 * s.ic1 + a3 * v3;
+        s.ic1 = 2 * v1 - s.ic1; s.ic2 = 2 * v2 - s.ic2;
+        lp = v2; hp = v0 - k * v1 - v2;
+    }
+    void update() noexcept
+    {
+        g = std::tan(3.14159265f * fc / float(fs)); k = 1.41421356f;   // Butterworth Q = 0.7071
+        a1 = 1.0f / (1.0f + g * (g + k)); a2 = g * a1; a3 = g * a2;
+    }
+    double fs = 48000.0; float fc = 1000.0f, g = 0, k = 1.414f, a1 = 0, a2 = 0, a3 = 0;
+    S st[3];
+};
+
+// One band's shaper: 4x oversampled waveshaper with character, heat (asymmetry) and auto-gain.
+class BandShaper
+{
+public:
+    void prepare(double sr) noexcept
+    {
+        fs = sr; os.reset(); dc.setSampleRate(sr); dc.setHighpass(12.0f); pres.setSampleRate(sr); pres.setHighpass(1800.0f);
+        envIn = envOut = 1e-4f; agGain = 1.0f; crushHold = 0.0f; crushPhase = 0.0f;
+        const float a = 1.0f - std::exp(-1.0f / (0.05f * float(sr))); envA = a; agA = 1.0f - std::exp(-1.0f / (0.12f * float(sr)));
+    }
+    void reset() noexcept { os.reset(); dc.reset(); pres.reset(); }
+    void set(int character, float drive, float heat) noexcept { ch = character; d = drive; h = heat; }
+
+    float process(float x) noexcept
+    {
+        // track dry level
+        envIn += (std::fabs(x) - envIn) * envA;
+        if (d < 0.002f) { envOut = envIn; agGain = 1.0f; return x; }
+
+        const float pre = 1.0f + d * d * 30.0f;               // up to +30 dB into the shaper
+        const float bias = h * 0.35f * d;                     // asymmetry = even harmonics
+        float in = x + pres.process(x) * h * 0.6f;            // heat adds presence before the clip
+        float y;
+        if (ch == 4)                                          // Crush: deliberately aliasy, no OS
+        {
+            const float bits = lerp(16.0f, 4.0f, d), q = std::pow(2.0f, bits - 1.0f);
+            const float rate = lerp(1.0f, 0.12f, d);         // sample-rate reduction
+            crushPhase += rate; if (crushPhase >= 1.0f) { crushPhase -= 1.0f; crushHold = std::round(in * q) / q; }
+            y = crushHold;
+        }
+        else
+        {
+            float up[4]; os.upsample(in, up);
+            for (auto& v : up) v = shape((v + bias) * pre) - shape(bias * pre);
+            y = os.downsample(up);
+            y = dc.process(y);
+        }
+        // auto-gain: match wet level to dry level, slow, bounded
+        envOut += (std::fabs(y) - envOut) * envA;
+        const float want = clampf(envIn / std::max(envOut, 1e-5f), 0.08f, 2.5f);
+        agGain += (want - agGain) * agA;
+        return y * agGain;
+    }
+    float autoGainDb() const noexcept { return 20.0f * std::log10(std::max(agGain, 1e-4f)); }
+
+private:
+    float shape(float v) const noexcept
+    {
+        switch (ch)
+        {
+            case 0:  return fastTanh(v);                                                   // Tape
+            case 1:  { const float t = fastTanh(v * 0.7f); return t + 0.18f * t * t * (v > 0 ? 1.0f : -1.0f); } // Tube: soft + 2nd
+            case 2:  return std::sin(clampf(v, -6.2f, 6.2f) * 0.9f) * 0.95f;                // Fold
+            case 3:  { const float r = v >= 0 ? v : -v * 0.35f; return fastTanh(r * 1.2f) - 0.25f; }   // Rectify (half-wave-ish)
+            default: return fastTanh(v);
+        }
+    }
+    Oversampler4x os; OnePole dc, pres;
+    int ch = 0; float d = 0, h = 0; double fs = 48000.0;
+    float envIn = 0, envOut = 0, envA = 0.001f, agGain = 1.0f, agA = 0.001f, crushHold = 0, crushPhase = 0;
+};
+
+class CoreEngine
+{
+public:
+    void prepare(double sr, int /*maxBlock*/) noexcept
+    {
+        fs = sr;
+        for (int c = 0; c < 2; ++c)
+        {
+            xLow[c].setSampleRate(sr); xHigh[c].setSampleRate(sr); apLow[c].setSampleRate(sr);
+            lowCut[c].setSampleRate(sr);  lowCut[c].setType(CutFilter::Type::Lowcut);
+            highCut[c].setSampleRate(sr); highCut[c].setType(CutFilter::Type::Highcut);
+            tiltEq[c].setSampleRate(sr);
+        }
+        for (int b = 0; b < 3; ++b) for (int ms = 0; ms < 2; ++ms) shaper[b][ms].prepare(sr);
+        for (auto* s : { &smMix, &smOut, &smWidth, &smSub, &smFocus, &smHeat, &smLowX, &smHighX }) { s->setSampleRate(sr); s->setTime(30.0f); }
+        for (auto& s : smDrive) { s.setSampleRate(sr); s.setTime(30.0f); }
+        for (auto& s : smBandMix) { s.setSampleRate(sr); s.setTime(30.0f); }
+        for (auto& s : smBandGain) { s.setSampleRate(sr); s.setTime(30.0f); }
+        setParams(params);
+        smMix.reset(params.mix); smOut.reset(dbToGain(params.output)); smWidth.reset(params.width); smSub.reset(params.subLock ? 1.0f : 0.0f); smFocus.reset(params.focus);
+        for (int b = 0; b < 3; ++b) { smBandMix[b].reset(params.band[b].mix); smBandGain[b].reset(dbToGain(params.band[b].gain)); smDrive[b].reset(smDrive[b].getTarget()); }
+        smHeat.reset(params.heat); smLowX.reset(params.lowX); smHighX.reset(params.highX);
+        reset();
+    }
+    void reset() noexcept
+    {
+        for (int c = 0; c < 2; ++c) { xLow[c].reset(); xHigh[c].reset(); apLow[c].reset(); lowCut[c].reset(); highCut[c].reset(); tiltEq[c].reset(); }
+        for (int b = 0; b < 3; ++b) for (int ms = 0; ms < 2; ++ms) shaper[b][ms].reset();
+    }
+    void setParams(const CoreParams& p) noexcept
+    {
+        params = p;
+        smLowX.setTarget(p.lowX); smHighX.setTarget(p.highX); smHeat.setTarget(p.heat);
+        for (int c = 0; c < 2; ++c)
+        {
+            lowCut[c].setSlope(static_cast<CutFilter::Slope>(clampi(p.lowSlope, 0, 3)));
+            highCut[c].setSlope(static_cast<CutFilter::Slope>(clampi(p.highSlope, 0, 3)));
+            lowCut[c].setCutoff(p.lowCutHz); highCut[c].setCutoff(p.highCutHz); tiltEq[c].setTilt(p.tilt);
+        }
+        for (int b = 0; b < 3; ++b)
+        {
+            smDrive[b].setTarget(clampf(p.band[b].drive * (0.25f + p.drive * 1.5f), 0.0f, 1.0f));
+            character[b] = p.band[b].character;
+            smBandMix[b].setTarget(p.band[b].mix); smBandGain[b].setTarget(dbToGain(p.band[b].gain));
+        }
+        smMix.setTarget(p.mix); smOut.setTarget(dbToGain(p.output)); smWidth.setTarget(p.width);
+        smSub.setTarget(p.subLock ? 1.0f : 0.0f); smFocus.setTarget(p.focus);
+    }
+
+    void process(float* L, float* R, int n) noexcept
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            const float dryL = L[i], dryR = R[i];
+            const float mix = smMix.next(), out = smOut.next(), wid = smWidth.next(), sub = smSub.next(), focus = smFocus.next();
+            // smoothed drive / heat / crossovers: coefficients refreshed every 16 samples
+            const float heatNow = smHeat.next(), lx = smLowX.next(), hx = smHighX.next();
+            for (int b = 0; b < 3; ++b) driveNow[b] = smDrive[b].next();
+            if ((++coefCounter & 15) == 0)
+            {
+                for (int c = 0; c < 2; ++c) { xLow[c].setCutoff(lx); xHigh[c].setCutoff(hx); apLow[c].setCutoff(hx); }
+                for (int b = 0; b < 3; ++b) for (int ms = 0; ms < 2; ++ms) shaper[b][ms].set(character[b], driveNow[b], heatNow);
+            }
+            // split
+            float band[3][2];
+            for (int c = 0; c < 2; ++c)
+            {
+                const float x = c == 0 ? dryL : dryR;
+                float lo, rest, mid, hi;
+                xLow[c].process(x, lo, rest);
+                xHigh[c].process(rest, mid, hi);
+                lo = apLow[c].allpass(lo);                 // phase-match the low band to the second crossover
+                band[0][c] = lo; band[1][c] = mid; band[2][c] = hi;
+            }
+            float wetL = 0.0f, wetR = 0.0f;
+            for (int b = 0; b < 3; ++b)
+            {
+                const float bm = smBandMix[b].next(), bg = smBandGain[b].next();
+                float m = 0.5f * (band[b][0] + band[b][1]), s = 0.5f * (band[b][0] - band[b][1]);
+                // focus: scale how much of mid / side goes through the shaper
+                const float fm = focus > 0 ? 1.0f - focus : 1.0f, fsd = focus < 0 ? 1.0f + focus : 1.0f;
+                float pm = shaper[b][0].process(m * fm) + m * (1.0f - fm);
+                float ps = shaper[b][1].process(s * fsd) + s * (1.0f - fsd);
+                float oL = pm + ps, oR = pm - ps;
+                if (b == 0)   // sub lock: low band stays clean and mono
+                {
+                    const float mono = m;
+                    oL = lerp(oL, mono, sub); oR = lerp(oR, mono, sub);
+                }
+                oL = lerp(band[b][0], oL, bm) * bg; oR = lerp(band[b][1], oR, bm) * bg;
+                wetL += oL; wetR += oR;
+            }
+            // width (not on the sub band if locked... approximate: width acts on everything above low band)
+            {
+                const float midv = 0.5f * (wetL + wetR), side = 0.5f * (wetL - wetR) * wid;
+                wetL = midv + side; wetR = midv - side;
+            }
+            wetL = tiltEq[0].process(highCut[0].process(lowCut[0].process(wetL)));
+            wetR = tiltEq[1].process(highCut[1].process(lowCut[1].process(wetR)));
+            wetL = softCeiling(wetL); wetR = softCeiling(wetR);
+            const float a = std::cos(mix * 1.5707963f), bgain = std::sin(mix * 1.5707963f);
+            L[i] = (dryL * a + wetL * bgain) * out;
+            R[i] = (dryR * a + wetR * bgain) * out;
+            if (wetTapL) { wetTapL[i] = wetL * bgain * out; wetTapR[i] = wetR * bgain * out; }
+        }
+    }
+    void processMono(float* M, int n) noexcept
+    {
+        for (int s0 = 0; s0 < n; s0 += 4096)
+        {
+            const int len = std::min(4096, n - s0);
+            for (int i = 0; i < len; ++i) scratch[i] = M[s0 + i];
+            process(M + s0, scratch, len);
+            for (int i = 0; i < len; ++i) M[s0 + i] = 0.5f * (M[s0 + i] + scratch[i]);
+        }
+    }
+    void setWetTap(float* l, float* r) noexcept { wetTapL = l; wetTapR = r; }
+    float bandAutoGainDb(int b) const noexcept { return shaper[b][0].autoGainDb(); }
+
+private:
+    double fs = 48000.0;
+    CoreParams params;
+    CrossoverLR4 xLow[2], xHigh[2], apLow[2];
+    BandShaper shaper[3][2];    // [band][mid/side]
+    CutFilter lowCut[2], highCut[2]; TiltEQ tiltEq[2];
+    Smoother smMix, smOut, smWidth, smSub, smFocus, smBandMix[3], smBandGain[3], smDrive[3], smHeat, smLowX, smHighX;
+    int character[3] = { 0, 0, 0 }; float driveNow[3] = { 0, 0, 0 }; unsigned coefCounter = 0;
+    float scratch[4096] {};
+    float* wetTapL = nullptr; float* wetTapR = nullptr;
+};
+
+} // namespace zw

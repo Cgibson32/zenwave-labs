@@ -167,6 +167,37 @@ int main()
         CHECK(std::fabs(r - (999.0f - 9.5f)) < 0.01f, "DelayLine Hermite read interpolates a ramp exactly");
     }
 
+    // --- Core: LR4 crossover sums flat; auto-gain holds level under heavy drive ----
+    {
+        zw::CoreEngine e; e.prepare(sr, 512); zw::CoreParams p; p.drive = 0; for (auto& b : p.band) b.drive = 0; p.subLock = false; e.setParams(p);
+        double worst = 0;
+        for (float f : { 100.0f, 150.0f, 1000.0f, 3500.0f, 8000.0f })
+        {
+            e.reset(); const int N = 49152; std::vector<float> L(N), R(N);
+            for (int i = 0; i < N; ++i) L[i] = R[i] = 0.5f * std::sin(2 * zw::kPi * f * i / float(sr));
+            for (int s0 = 0; s0 < N; s0 += 512) e.process(&L[s0], &R[s0], 512);
+            double en = 0; for (int i = N / 2; i < N; ++i) en += L[i] * L[i];
+            const double db = 10 * std::log10(en / (N / 2)) - 20 * std::log10(0.5 / std::sqrt(2.0));
+            worst = std::max(worst, std::fabs(db));
+        }
+        std::printf("      Core crossover worst deviation: %.2f dB\n", worst);
+        CHECK(worst < 0.3, "Core LR4 bands sum flat (within 0.3 dB) when nothing is driven");
+
+        for (int ch = 0; ch < 5; ++ch)
+        {
+            zw::CoreEngine d; d.prepare(sr, 512); zw::CoreParams q; q.drive = 0.9f; q.heat = 0.6f; for (auto& b : q.band) { b.drive = 0.9f; b.character = ch; } d.setParams(q);
+            const int N = 98304; std::vector<float> L(N), R(N);
+            for (int i = 0; i < N; ++i) { const float x = 0.4f * std::sin(2 * zw::kPi * 100.0f * i / float(sr)) + 0.2f * std::sin(2 * zw::kPi * 2000.0f * i / float(sr)); L[i] = R[i] = x; }
+            double ein = 0; for (int i = N / 2; i < N; ++i) ein += L[i] * L[i];
+            for (int s0 = 0; s0 < N; s0 += 512) d.process(&L[s0], &R[s0], 512);
+            double eout = 0; float pk = 0; bool fin = true; for (int i = N / 2; i < N; ++i) { eout += L[i] * L[i]; pk = std::max(pk, std::fabs(L[i])); fin &= std::isfinite(L[i]); }
+            const double delta = 10 * std::log10(eout / ein);
+            std::printf("      Core character %d at 90%% drive: level delta %+.1f dB, peak %.2f\n", ch, delta, pk);
+            CHECK(fin && pk <= 1.05f, "Core output stays finite and under the ceiling at 90% drive");
+            CHECK(std::fabs(delta) < 4.0, "Core auto-gain keeps the level within 4 dB of the input at 90% drive");
+        }
+    }
+
     std::printf("\n%s (%d failure%s)\n", failures ? "TESTS FAILED" : "ALL TESTS PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }
