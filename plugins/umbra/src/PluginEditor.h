@@ -18,15 +18,18 @@ private:
 
     UmbraAudioProcessor& processor;
     // Umbra's accent is a deeper, colder violet than Drift's
-    zwui::LookAndFeel lnf { juce::Colour(0xff6d28d9), juce::Colour(0xff9f7aea) };
+    zwui::LookAndFeel lnf { juce::Colour(0xff7c3aed), juce::Colour(0xffc4b5fd), zwui::Palette::magenta };
+    zwui::Stage stage;
 
     zwui::Knob preDelay, size, decay, dark, mix;            // macro row
-    zwui::Knob density, motion, gravity, early, duck, width, output;  // deep row
+    zwui::Knob density, motion, gravity, early, duck, width, output, motionRate;  // deep row
 
-    juce::ToggleButton freezeButton { "FREEZE" };
-    juce::ComboBox presetBox;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeAttach;
+    juce::ToggleButton freezeButton { "FREEZE" }, motionSyncButton { "SYNC" }, powerButton;
+    juce::ComboBox presetBox, motionDivBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeAttach, motionSyncAttach, powerAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> motionDivAttach;
     int lastPreset = -1;
+    double lastTick = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UmbraAudioProcessorEditor)
 };

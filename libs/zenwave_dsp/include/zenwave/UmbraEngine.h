@@ -30,6 +30,7 @@ struct UmbraParams
     float mix        = 0.3f;    // 0..1
     float output     = 0.0f;    // dB
     bool  freeze     = false;
+    float motionRate = 1.0f;    // multiplier on the reverb LFO rates (free or tempo-derived)
 };
 
 class UmbraEngine
@@ -69,8 +70,9 @@ public:
         params = p;
         reverb.setSize(p.size);
         reverb.setDecay(p.decay);
-        reverb.setDiffusion(0.35f + p.density * 0.5f);
+        reverb.setDiffusion(p.density);
         reverb.setModDepth(p.motion);
+        reverb.setModRate(p.motionRate);
         reverb.setFreeze(p.freeze);
         // Dark: in-loop damping 12 kHz → 1.2 kHz, plus wet-path tilt
         reverb.setDamping(lerp(12000.0f, 1200.0f, p.dark * p.dark));
@@ -124,8 +126,8 @@ public:
             float lL = 0.0f, lR = 0.0f;
             reverb.process(pL + eL * 0.3f, pR + eR * 0.3f, lL, lR);
 
-            float wetL = lL + eL * erLvl;
-            float wetR = lR + eR * erLvl;
+            float wetL = lL * 1.4f + eL * erLvl * 0.6f;
+            float wetR = lR * 1.4f + eR * erLvl * 0.6f;
 
             // Dark tilt: cut highs, nudge low-mids
             wetL = darken(0, wetL); wetR = darken(1, wetR);

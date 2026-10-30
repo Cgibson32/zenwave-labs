@@ -3,11 +3,6 @@
 
 using APVTS = juce::AudioProcessorValueTreeState;
 
-// Note divisions for tempo sync (index → beats)
-static const std::array<std::pair<const char*, double>, 11> kDivisions {{
-    { "1/32", 0.125 }, { "1/16T", 1.0 / 6.0 }, { "1/16", 0.25 }, { "1/8T", 1.0 / 3.0 }, { "1/16.", 0.375 },
-    { "1/8", 0.5 }, { "1/4T", 2.0 / 3.0 }, { "1/8.", 0.75 }, { "1/4", 1.0 }, { "1/2", 2.0 }, { "1/1", 4.0 }
-}};
 
 DriftAudioProcessor::DriftAudioProcessor()
     : AudioProcessor(BusesProperties()
@@ -30,6 +25,10 @@ DriftAudioProcessor::DriftAudioProcessor()
     pFreeze   = apvts.getRawParameterValue(ParamIDs::freeze);
     pMix      = apvts.getRawParameterValue(ParamIDs::mix);
     pOutput   = apvts.getRawParameterValue(ParamIDs::output);
+    pPower    = apvts.getRawParameterValue(ParamIDs::power);
+    pWobbleSync = apvts.getRawParameterValue(ParamIDs::wobbleSync);
+    pWobbleDiv  = apvts.getRawParameterValue(ParamIDs::wobbleDiv);
+    pWobbleRate = apvts.getRawParameterValue(ParamIDs::wobbleRate);
 }
 
 APVTS::ParameterLayout DriftAudioProcessor::createLayout()
@@ -45,8 +44,7 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
                 [](float v, int) { return juce::String(juce::roundToInt(v * 100.0f)) + " %"; }));
     };
 
-    juce::StringArray divNames;
-    for (auto& d : kDivisions) divNames.add(d.first);
+    const auto divNames = zwui::divisionNames();
 
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::time, 1 }, "Time",
@@ -55,6 +53,12 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
             [](float v, int) { return juce::String(v, v < 100.0f ? 1 : 0) + " ms"; })));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::sync, 1 }, "Sync", false));
     params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::division, 1 }, "Division", divNames, 5));
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::power, 1 }, "Power", true));
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::wobbleSync, 1 }, "Wobble Sync", false));
+    params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::wobbleDiv, 1 }, "Wobble Division", divNames, 10));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::wobbleRate, 1 }, "Wobble Rate",
+        Rng{ 0.05f, 4.0f, 0.001f, 0.5f }, 0.45f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(v, 2) + " Hz"; })));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::feedback, 1 }, "Feedback",
         Rng{ 0.0f, 1.1f, 0.001f }, 0.45f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
@@ -69,7 +73,9 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
             [](float v, int) { return juce::String(juce::roundToInt(v * 100.0f)) + " %"; })));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::spread, 1 }, "Spread",
-        Rng{ -1.0f, 1.0f, 0.001f }, 0.0f));
+        Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [](float v, int) { return (v > 0 ? "+" : "") + juce::String(juce::roundToInt(v * 100.0f)) + " %"; })));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::pingPong, 1 }, "Ping-Pong", true));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::freeze, 1 }, "Freeze", false));
     params.push_back(pct(ParamIDs::mix, "Mix", 0.35f));
@@ -84,6 +90,8 @@ void DriftAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     engine.prepare(sampleRate, samplesPerBlock);
     monoScratch.setSize(1, samplesPerBlock);
+    power.prepare(sampleRate, samplesPerBlock, 2);
+    meterIn.prepare(sampleRate); meterOut.prepare(sampleRate);
     updateEngineParams();
 }
 
@@ -97,9 +105,7 @@ bool DriftAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) con
 
 float DriftAudioProcessor::syncedTimeMs() const
 {
-    const int idx = juce::jlimit(0, int(kDivisions.size()) - 1, int(pDivision->load()));
-    const double beats = kDivisions[size_t(idx)].second;
-    return float(60000.0 / hostBpm * beats);
+    return float(zwui::divisionSeconds(int(pDivision->load()), hostBpm) * 1000.0);
 }
 
 void DriftAudioProcessor::updateEngineParams()
@@ -118,6 +124,9 @@ void DriftAudioProcessor::updateEngineParams()
     p.freeze     = pFreeze->load() > 0.5f;
     p.mix        = pMix->load();
     p.output     = pOutput->load();
+    p.wobbleHz   = pWobbleSync->load() > 0.5f
+                     ? float(1.0 / zwui::divisionSeconds(int(pWobbleDiv->load()), hostBpm))
+                     : pWobbleRate->load();
     engine.setParams(p);
 }
 
@@ -125,15 +134,16 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
 
-    if (auto* ph = getPlayHead())
-        if (auto pos = ph->getPosition())
-            if (auto bpm = pos->getBpm()) hostBpm = juce::jlimit(20.0, 300.0, *bpm);
-
+    hostBpm = zwui::readTransport(*this, motion, hostBpm);
     updateEngineParams();
+    meterIn.push(buffer, motion.levelIn);
 
     const int n = buffer.getNumSamples();
     const int numIn = getTotalNumInputChannels();
     const int numOut = getTotalNumOutputChannels();
+
+    power.begin(buffer, pPower->load() > 0.5f);
+    if (power.skipProcessing()) { motion.levelOut.store(0.0f); return; }
 
     if (numOut >= 2)
     {
@@ -145,6 +155,9 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         engine.processMono(buffer.getWritePointer(0), n);
     }
+
+    power.end(buffer);
+    meterOut.push(buffer, motion.levelOut);
 }
 
 void DriftAudioProcessor::setCurrentProgram(int index)

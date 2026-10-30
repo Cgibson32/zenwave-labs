@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <zenwave/zenwave.h>
+#include <zenwave_ui/ProcessorHelpers.h>
 #include "Presets.h"
 
 namespace ParamIDs
@@ -18,6 +19,10 @@ namespace ParamIDs
     inline constexpr auto mix      = "mix";
     inline constexpr auto output   = "output";
     inline constexpr auto freeze   = "freeze";
+    inline constexpr auto power    = "power";
+    inline constexpr auto motionSync = "motionsync";
+    inline constexpr auto motionDiv  = "motiondiv";
+    inline constexpr auto motionRate = "motionrate";
 }
 
 class UmbraAudioProcessor : public juce::AudioProcessor
@@ -50,14 +55,18 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    zwui::Motion motion;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void updateEngineParams();
 
     zw::UmbraEngine engine;
+    zwui::PowerSwitch power;
+    zwui::Meter meterIn, meterOut;
     int currentPreset = 0;
-    std::atomic<float>* p[13] {};
+    double hostBpm = 120.0;
+    std::atomic<float>* p[17] {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UmbraAudioProcessor)
 };

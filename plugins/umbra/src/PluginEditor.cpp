@@ -18,9 +18,16 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
     duck.init    (*this, processor.apvts, ParamIDs::duck,     "DUCK",      false);
     width.init   (*this, processor.apvts, ParamIDs::width,    "WIDTH",     false);
     output.init  (*this, processor.apvts, ParamIDs::output,   "OUTPUT",    false);
+    motionRate.init(*this, processor.apvts, ParamIDs::motionRate, "MOTION RATE", false);
 
-    addAndMakeVisible(freezeButton);
-    freezeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::freeze, freezeButton);
+    for (auto* b : { &freezeButton, &motionSyncButton, &powerButton }) addAndMakeVisible(b);
+    powerButton.getProperties().set("round", true);
+    freezeAttach     = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::freeze, freezeButton);
+    motionSyncAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::motionSync, motionSyncButton);
+    powerAttach      = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::power, powerButton);
+    addAndMakeVisible(motionDivBox);
+    motionDivBox.addItemList(zwui::divisionNames(), 1);
+    motionDivAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, ParamIDs::motionDiv, motionDivBox);
 
     addAndMakeVisible(presetBox);
     refreshPresetBox();
@@ -30,10 +37,11 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
     };
 
     setResizable(true, true);
-    setResizeLimits(640, 400, 1280, 800);
+    setResizeLimits(720, 450, 1440, 900);
     getConstrainer()->setFixedAspectRatio(1.6);
-    setSize(800, 500);
-    startTimerHz(10);
+    setSize(880, 550);
+    lastTick = juce::Time::getMillisecondCounterHiRes();
+    startTimerHz(30);
 }
 
 UmbraAudioProcessorEditor::~UmbraAudioProcessorEditor() { setLookAndFeel(nullptr); }
@@ -54,42 +62,54 @@ void UmbraAudioProcessorEditor::refreshPresetBox()
 
 void UmbraAudioProcessorEditor::timerCallback()
 {
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    const float dt = juce::jlimit(0.0f, 0.1f, float((now - lastTick) * 0.001));
+    lastTick = now;
+    stage.tick(processor.motion, dt);
+    lnf.pulse = processor.motion.pulse;
+
     if (processor.getCurrentProgram() != lastPreset)
     {
         lastPreset = processor.getCurrentProgram();
         presetBox.setSelectedId(lastPreset + 1, juce::dontSendNotification);
     }
+    const bool msync = motionSyncButton.getToggleState();
+    motionDivBox.setEnabled(msync); motionDivBox.setAlpha(msync ? 1.0f : 0.4f);
+    motionRate.slider.setAlpha(msync ? 0.35f : 1.0f);
+    const bool on = powerButton.getToggleState();
+    for (auto* k : { &preDelay, &size, &decay, &dark, &mix, &density, &motion, &gravity, &early, &duck, &width, &output, &motionRate })
+        k->slider.setAlpha(on ? k->slider.getAlpha() : 0.3f);
+    repaint();
 }
 
 void UmbraAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(zwui::Palette::bg);
     auto r = getLocalBounds().toFloat();
-    zwui::drawStarfield(g, r, lnf.accent, 7, 110);
-    const float s = r.getWidth() / 800.0f;
-    zwui::drawHeader(g, r, s, "UMBRA", "DARK REVERB   ·   ZENWAVE LABS");
-    g.setColour(zwui::Palette::line);
-    g.drawLine(20 * s, 332 * s, r.getWidth() - 20 * s, 332 * s, 1.0f);
-    g.setColour(zwui::Palette::dim);
-    g.setFont(juce::Font(juce::FontOptions(10.0f * s, juce::Font::bold)));
-    g.drawText("DEEP CONTROL", juce::Rectangle<float>(22 * s, 338 * s, 200 * s, 14 * s), juce::Justification::centredLeft);
+    const float s = r.getWidth() / 880.0f;
+    stage.render(g, getLocalBounds(), lnf.accent, lnf.accent2, processor.motion, 7);
+    zwui::drawHeader(g, r, s, "UMBRA", "DARK REVERB", lnf.accent, lnf.accentHi, lnf.accent2);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 84 * s, 836 * s, 262 * s), "SPACE", lnf.accent, lnf.accent2, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 358 * s, 836 * s, 170 * s), "SHAPE", lnf.accent2, lnf.accent, s);
+    zwui::drawOrbit(g, { 470 * s, 44 * s }, 26 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
 void UmbraAudioProcessorEditor::resized()
 {
-    const float s = float(getWidth()) / 800.0f;
+    const float s = float(getWidth()) / 880.0f;
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
-    presetBox.setBounds(S(470), S(22), S(250), S(28));
-    freezeButton.setBounds(S(728), S(22), S(52), S(28));
+    powerButton.setBounds(S(400), S(22), S(34), S(34));
+    presetBox.setBounds(S(520), S(24), S(250), S(30));
+    freezeButton.setBounds(S(780), S(24), S(78), S(30));
 
-    // Macro row: five big knobs
     zwui::Knob* bigs[] = { &preDelay, &size, &decay, &dark, &mix };
-    int x = S(40);
-    for (auto* k : bigs) { k->layout(x, S(100), S(132), S(160), S(16)); x += S(148); }
+    int x = S(66);
+    for (auto* k : bigs) { k->layout(x, S(120), S(140), S(160), S(16)); x += S(156); }
 
-    // Deep row: seven small knobs
-    zwui::Knob* smalls[] = { &density, &motion, &gravity, &early, &duck, &width, &output };
-    x = S(22);
-    for (auto* k : smalls) { k->layout(x, S(368), S(100), S(110), S(14)); x += S(108); }
+    motionSyncButton.setBounds(S(52), S(300), S(58), S(26));
+    motionDivBox.setBounds(S(116), S(300), S(84), S(26));
+
+    zwui::Knob* smalls[] = { &density, &motion, &motionRate, &gravity, &early, &duck, &width, &output };
+    x = S(34);
+    for (auto* k : smalls) { k->layout(x, S(396), S(96), S(116), S(14)); x += S(103); }
 }

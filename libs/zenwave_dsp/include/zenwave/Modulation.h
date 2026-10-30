@@ -61,6 +61,15 @@ public:
     // amount 0..1 → up to ~4 ms of modulation
     void setAmount(float a) noexcept { amount = clampf(a, 0.0f, 1.0f); }
 
+    // Set the wow (slow) rate; flutter and drift follow proportionally. Used for tempo sync.
+    void setWowRate(float hz) noexcept
+    {
+        hz = clampf(hz, 0.02f, 8.0f);
+        wow.setRate(hz);
+        flutter.setRate(clampf(hz * 14.0f, 2.0f, 14.0f));
+        drift.setRate(clampf(hz * 0.27f, 0.02f, 1.0f));
+    }
+
     float nextOffsetSamples() noexcept
     {
         const float ms = amount * (wow.next() * 2.2f + flutter.next() * 0.35f + drift.next() * 1.4f);

@@ -32,6 +32,7 @@ struct DriftParams
     bool  pingPong   = true;
     bool  freeze     = false;
     float spread     = 0.0f;    // -1..1 L/R time offset
+    float wobbleHz   = 0.45f;   // wow rate (free or tempo-derived)
 };
 
 class DriftEngine
@@ -87,14 +88,17 @@ public:
         for (int c = 0; c < 2; ++c)
         {
             wf[c].setAmount(p.wowFlutter);
+            wf[c].setWowRate(p.wobbleHz);
             ageLP[c].setLowpass(lpHz);
-            sat[c].setDrive(p.age * 0.7f);
-            sat[c].setEmphasis(p.age);
+            sat[c].setDrive(p.age * 0.55f);
+            sat[c].setEmphasis(p.age * 0.25f);
         }
         hissGain = p.age * p.age * 0.004f;
         reverb.setSize(p.size);
         reverb.setDecay(p.decay);
-        reverb.setDamping(lerp(9000.0f, 2500.0f, p.age));
+        reverb.setDamping(lerp(11000.0f, 3000.0f, p.age));
+        reverb.setModDepth(0.35f + p.wowFlutter * 0.4f);
+        reverb.setDiffusion(0.7f);
         reverb.setFreeze(p.freeze);
     }
 
@@ -136,10 +140,11 @@ public:
 
             // Reverb send from the echo
             float rvL = 0.0f, rvR = 0.0f;
-            reverb.process(agedL * spc, agedR * spc, rvL, rvR);
+            // Send both the (highpassed) input and the repeats, so short notes still get space
+            reverb.process((inL * 0.5f + agedL) * spc, (inR * 0.5f + agedR) * spc, rvL, rvR);
 
-            float wetL = agedL + rvL;
-            float wetR = agedR + rvR;
+            float wetL = (agedL + rvL * 1.6f) * 0.8f;
+            float wetR = (agedR + rvR * 1.6f) * 0.8f;
 
             // Width (mid/side)
             const float mid  = 0.5f * (wetL + wetR);

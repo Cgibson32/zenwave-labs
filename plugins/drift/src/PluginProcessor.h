@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <zenwave/zenwave.h>
+#include <zenwave_ui/ProcessorHelpers.h>
 #include "Presets.h"
 
 namespace ParamIDs
@@ -20,6 +21,10 @@ namespace ParamIDs
     inline constexpr auto freeze     = "freeze";
     inline constexpr auto mix        = "mix";
     inline constexpr auto output     = "output";
+    inline constexpr auto power      = "power";
+    inline constexpr auto wobbleSync = "wobblesync";
+    inline constexpr auto wobbleDiv  = "wobblediv";
+    inline constexpr auto wobbleRate = "wobblerate";
 }
 
 class DriftAudioProcessor : public juce::AudioProcessor
@@ -52,6 +57,7 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    zwui::Motion motion;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -59,12 +65,15 @@ private:
     float syncedTimeMs() const;
 
     zw::DriftEngine engine;
+    zwui::PowerSwitch power;
+    zwui::Meter meterIn, meterOut;
     juce::AudioBuffer<float> monoScratch;
     int currentPreset = 0;
     double hostBpm = 120.0;
 
     std::atomic<float>* pTime{}, * pSync{}, * pDivision{}, * pFeedback{}, * pWow{}, * pAge{}, * pSpace{},
-                      * pSize{}, * pDecay{}, * pWidth{}, * pSpread{}, * pPingPong{}, * pFreeze{}, * pMix{}, * pOutput{};
+                      * pSize{}, * pDecay{}, * pWidth{}, * pSpread{}, * pPingPong{}, * pFreeze{}, * pMix{}, * pOutput{},
+                      * pPower{}, * pWobbleSync{}, * pWobbleDiv{}, * pWobbleRate{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DriftAudioProcessor)
 };
