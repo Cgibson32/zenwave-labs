@@ -38,6 +38,7 @@ namespace DriftManual
         {
             auto f = zwui::fieldSection();
             f.entries.insert(f.entries.begin(), { "PERFORM PAD", "The throw surface. Drag: across = delay time (snapped to divisions when SYNC is on), up = feedback (the pink zone at the top self-oscillates). Let go and the sound glides back to your knob settings over the GLIDE division - a perfect, repeatable throw every time. Your DAW records it as Pad X / Pad Y / Pad Hold automation, and you can map a controller pad to Pad Hold." });
+            f.entries.insert(f.entries.begin(), { "LEARN", "Play the track and press LEARN. For six seconds the plugin listens to the dry input, then places the wet Low Cut just above your sub fundamental and the High Cut where your top end actually ends - the effect sits in *this* track instead of a generic one. Fine-tune from there." });
             v.push_back(f);
         }
         v.push_back(zwui::motionSection());

@@ -55,3 +55,10 @@ Drift (free) → Umbra (dark reverb, $49) → Halo (shimmer reverb, $49) → Cor
 - **MOTION card** — two LFOs (sine / triangle / saw up / saw down / square / random / drift; free-running or tempo-synced and phase-locked to the host) and an envelope follower (attack / release / sensitivity), routed through four slots to any continuous knob. Modulated knobs show a range arc and a live cyan dot.
 - **Presets** — ‹ › browse, **SAVE** writes a user preset to `Documents/ZenWave Labs/<Plugin>/Presets/`, **A | B** compare (right-click copies the current slot to the other), **WARP** randomises (gentle; Shift = bolder; Cmd/Ctrl = anywhere). Right-click a knob to lock it from Warp or reset it.
 - **Field** — real-time spectrum (4096-pt FFT, 160 log bins, peak hold, dry-input ghost) with the EQ response and cutoff handles overlaid.
+
+## Perform, Orbit, Learn (v0.5)
+
+- **Perform pad** (Field card) - drag to throw (Drift: time x feedback, snapped to divisions when synced; Umbra: decay x send), release and it glides home over a synced division. Pad X / Y / Hold are automatable and MIDI-mappable.
+- **ORBIT** - every ZenWave plugin with Orbit on shares one Freeze over a shared-memory bus; the button shows the peer count.
+- **LEARN** - listens to the dry input for 6 s and places Low Cut above your sub, High Cut where the top end ends (Umbra also sets Gravity).
+- Manual lives in the MANUAL chip, top right; everything has a tooltip.

@@ -45,6 +45,9 @@ private:
     double lastTick = 0.0;
     std::vector<zwui::Knob*> allKnobs;
     juce::ToggleButton orbitButton { "ORBIT" };
+    juce::TextButton learnButton { "LEARN" };
+    zwui::Learner learner;
+    void applyLearn();
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> orbitAttach;
     juce::TextButton helpButton { "MANUAL" };
     juce::TooltipWindow tooltips { this, 650 };

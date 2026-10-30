@@ -34,7 +34,12 @@ namespace UmbraManual
               { "WIDTH", "Stereo width of the wet signal. 100 % = natural, up to 150 % = extra wide, 0 = mono.", "width" },
               { "OUTPUT", "Output trim, -24 to +12 dB.", "output" } } });
 
-        v.push_back(zwui::fieldSection());
+        {
+            auto f = zwui::fieldSection();
+            f.entries.insert(f.entries.begin(), { "PERFORM PAD", "The throw surface. Drag: across = decay, up = send (mix). Let go and the space glides back to your knob settings over the GLIDE division - swell a word or a snare into a cathedral and have it fall away in time. Recorded as Pad X / Pad Y / Pad Hold automation; map a controller pad to Pad Hold." });
+            f.entries.insert(f.entries.begin(), { "LEARN", "Play the track and press LEARN. For six seconds the plugin listens to the dry input, then places the wet Low Cut just above your sub fundamental, the High Cut where your top end actually ends, and Gravity so the sub stays dry - the effect sits in *this* track instead of a generic one. Fine-tune from there." });
+            v.push_back(f);
+        }
         v.push_back(zwui::motionSection());
         v.push_back(zwui::presetSection());
         v.push_back({ "RECIPES", "",

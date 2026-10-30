@@ -43,6 +43,10 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     addAndMakeVisible(presetBar);
     addAndMakeVisible(modPanel);
     addAndMakeVisible(orbitButton);
+    addAndMakeVisible(learnButton);
+    learnButton.getProperties().set("chip", true);
+    learnButton.setTooltip("Learn: play the track for 6 seconds. Sets the wet Low Cut just above your sub and the High Cut where your top end ends" + juce::String(""" + (' , and Gravity under the sub' if plug=='umbra' else '') + """) + ", so the effect sits in this track.");
+    learnButton.onClick = [this] { if (! learner.isActive()) learner.start(6.0f); };
     orbitAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, zwui::OrbitBus::orbitParamId, orbitButton);
     orbitButton.setTooltip("Orbit: link with every other ZenWave plugin that has Orbit on. Freeze one, freeze them all - Drift's loop and Umbra's tail lock together.");
     addAndMakeVisible(pad);
@@ -54,7 +58,7 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
 
     // Built-in manual + tooltips
     addAndMakeVisible(helpButton);
-    helpButton.getProperties().set("chip", true);
+    helpButton.getProperties().set("chip", true); helpButton.getProperties().set("book", true);
     helpButton.setTooltip("Manual: what every knob does, quick start and recipes");
     helpButton.onClick = [this] { manual.show(); };
     addChildComponent(manual);
@@ -122,6 +126,8 @@ void DriftAudioProcessorEditor::timerCallback()
     scope.update(processor.stereo);
     presetBar.sync();
     modPanel.tick();
+    if (learner.feed(analyserIn.levels, dt)) applyLearn();
+    learnButton.setButtonText(learner.isActive() ? "LEARNING " + juce::String(int(learner.progress() * 100)) + "%" : "LEARN");
     { const int n = processor.orbitLink.peers.load(); orbitButton.setButtonText(orbitButton.getToggleState() && n > 1 ? "ORBIT x" + juce::String(n) : "ORBIT"); }
     pad.setHome(processor.padXForTime(float(time.slider.getValue())), processor.padYForFeedback(float(feedback.slider.getValue())));
     pad.setColumns(syncButton.getToggleState() ? 9 : 0);
@@ -169,6 +175,7 @@ void DriftAudioProcessorEditor::resized()
     powerButton.setBounds(S(824), S(20), S(34), S(34));
     freezeButton.setBounds(S(752), S(300), S(84), S(26));
     orbitButton.setBounds(S(656), S(300), S(84), S(26));
+    learnButton.setBounds(S(744), S(536), S(100), S(17));
     modPanel.setBounds(S(22), S(700), S(836), S(170));
     modPanel.layoutScaled(s);
 
@@ -195,4 +202,14 @@ void DriftAudioProcessorEditor::resized()
     for (auto* k : tone) { k->layout(x, S(572), S(80), S(84), S(12)); x += S(84); }
     lowSlopeBox.setBounds(S(614), S(662), S(72), S(18));
     highSlopeBox.setBounds(S(698), S(662), S(72), S(18));
+}
+
+void DriftAudioProcessorEditor::applyLearn()
+{
+    const auto r = learner.result;
+    if (! r.valid) return;
+    auto set = [this](const char* id, float plain) { if (auto* p = processor.apvts.getParameter(id)) { p->beginChangeGesture(); p->setValueNotifyingHost(p->convertTo0to1(plain)); p->endChangeGesture(); } };
+    set(ParamIDs::lowCut,  juce::jlimit(20.0f, 400.0f, r.subHz * 1.6f));          // repeats/tails stay off the sub
+    set(ParamIDs::highCut, juce::jlimit(3000.0f, 20000.0f, r.rollOffHz * 0.85f)); // nothing above where the track ends
+    set(ParamIDs::lowSlope, 2.0f);
 }

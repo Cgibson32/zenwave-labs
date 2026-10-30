@@ -18,6 +18,8 @@ UmbraAudioProcessor::UmbraAudioProcessor()
 {
     for (int i = 0; i < 23; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
     mod.attach(apvts, umbraModTargets());
+    pad.attach(apvts);
+    bank.setAlwaysLocked({ zwui::PadIDs::x, zwui::PadIDs::y, zwui::PadIDs::hold, zwui::PadIDs::glide });
     bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze, zwui::OrbitBus::orbitParamId });
     bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
     bank.setSafeRange(ParamIDs::highCut, 2500.0f, 20000.0f);
@@ -76,6 +78,7 @@ APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
     params.push_back(pct(ParamIDs::bloom, "Bloom", 0.0f));
     zwui::addModParams(params, umbraModTargets());
     zwui::addOrbitParam(params);
+    zwui::addPadParams(params);
     return { params.begin(), params.end() };
 }
 
@@ -84,6 +87,7 @@ void UmbraAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
     mod.prepare(sampleRate);
+    pad.prepare(sampleRate);
     wetScratch.setSize(2, samplesPerBlock);
     power.prepare(sampleRate, samplesPerBlock, 2);
     meterIn.prepare(sampleRate); meterOut.prepare(sampleRate);
@@ -102,9 +106,13 @@ void UmbraAudioProcessor::updateEngineParams()
 {
     zw::UmbraParams u;
     const auto M = [this](int t) { return mod.value(t); };
-    u.preDelayMs = M(ModT::PreDelay); u.size = M(ModT::Size);     u.decay = M(ModT::Decay); u.dark  = M(ModT::Dark);
+    float decay = M(ModT::Decay), mix = M(ModT::Mix);
+    const float pa = pad.eased.load();
+    if (pa > 0.0001f) { decay = juce::jmap(pa, decay, pad.x()); mix = juce::jmap(pa, mix, pad.y()); }
+    pad.effX.store(decay); pad.effY.store(mix);
+    u.preDelayMs = M(ModT::PreDelay); u.size = M(ModT::Size);     u.decay = decay;          u.dark  = M(ModT::Dark);
     u.density    = M(ModT::Density);  u.motion = M(ModT::Motion); u.gravity = M(ModT::Gravity); u.early = M(ModT::Early);
-    u.duck       = M(ModT::Duck);     u.width = M(ModT::Width);   u.mix   = M(ModT::Mix);   u.output = p[11]->load();
+    u.duck       = M(ModT::Duck);     u.width = M(ModT::Width);   u.mix   = mix;            u.output = p[11]->load();
     u.freeze     = p[12]->load() > 0.5f;
     // Motion sync: slowest reverb LFO (0.09 Hz base) locks to one cycle per division
     u.motionRate = p[14]->load() > 0.5f
@@ -135,6 +143,7 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         const int len = juce::jmin(kSub, n - start);
         mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        pad.process(len, hostBpm);
         updateEngineParams();
         if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));
         if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);

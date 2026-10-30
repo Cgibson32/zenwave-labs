@@ -341,14 +341,18 @@ public:
             const float h = r.getHeight(), bx = r.getX() + h * 0.55f, by = r.getCentreY();
             const auto col = hover || down ? juce::Colours::white : accentHi;
             g.setColour(col);
-            juce::Path book;
-            book.addRoundedRectangle(bx - 5.5f, by - 3.2f, 5.0f, 6.4f, 1.0f);
-            book.addRoundedRectangle(bx + 0.5f, by - 3.2f, 5.0f, 6.4f, 1.0f);
-            g.strokePath(book, juce::PathStrokeType(1.0f));
-            g.drawLine(bx, by - 3.2f, bx, by + 3.2f, 1.0f);
+            const bool book = bool(b.getProperties()["book"]);
+            if (book)
+            {
+                juce::Path bk;
+                bk.addRoundedRectangle(bx - 5.5f, by - 3.2f, 5.0f, 6.4f, 1.0f);
+                bk.addRoundedRectangle(bx + 0.5f, by - 3.2f, 5.0f, 6.4f, 1.0f);
+                g.strokePath(bk, juce::PathStrokeType(1.0f));
+                g.drawLine(bx, by - 3.2f, bx, by + 3.2f, 1.0f);
+            }
             juce::Font f(juce::FontOptions(h * 0.52f, juce::Font::bold)); f.setExtraKerningFactor(0.12f);
             g.setFont(f);
-            g.drawText(b.getButtonText(), r.withTrimmedLeft(h * 1.1f).withTrimmedRight(h * 0.35f), juce::Justification::centred);
+            g.drawText(b.getButtonText(), book ? r.withTrimmedLeft(h * 1.1f).withTrimmedRight(h * 0.35f) : r, juce::Justification::centred);
             return;
         }
         g.setFont(juce::Font(juce::FontOptions(b.getButtonText().length() <= 1 ? 18.0f : 10.5f, juce::Font::bold)));
@@ -686,6 +690,47 @@ private:
 };
 
 struct EqCurve { float lowCutHz, highCutHz; int lowSlope, highSlope; float tilt; };
+
+// LEARN: listens to the dry input for a few seconds and finds where the sub fundamental sits and
+// where the top end rolls off, so the plugin can place its cuts (and Gravity) around *this* track.
+class Learner
+{
+public:
+    struct Result { float subHz = 50.0f, rollOffHz = 16000.0f; bool valid = false; };
+    void start(float seconds) { avg.fill(0.0f); frames = 0; target = seconds; elapsed = 0.0f; active = true; }
+    bool isActive() const { return active; }
+    float progress() const { return active ? juce::jlimit(0.0f, 1.0f, elapsed / target) : 0.0f; }
+    // Feed the input analyser's bins each editor tick; returns true on the tick learning completes
+    bool feed(const std::array<float, SpectrumAnalyser::kBins>& levels, float dt)
+    {
+        if (! active) return false;
+        for (int b = 0; b < SpectrumAnalyser::kBins; ++b) avg[size_t(b)] += levels[size_t(b)];
+        ++frames; elapsed += dt;
+        if (elapsed < target) return false;
+        active = false;
+        for (auto& v : avg) v /= float(juce::jmax(1, frames));
+        // sub fundamental: strongest bin between 25 and 140 Hz
+        int best = -1; float bestV = 0.0f;
+        for (int b = 0; b < SpectrumAnalyser::kBins; ++b)
+        {
+            const float hz = SpectrumAnalyser::freqForBin(b);
+            if (hz < 25.0f || hz > 140.0f) continue;
+            if (avg[size_t(b)] > bestV) { bestV = avg[size_t(b)]; best = b; }
+        }
+        float peak = 0.0f; for (auto v : avg) peak = juce::jmax(peak, v);
+        result.valid = peak > 0.15f;      // something was actually playing
+        result.subHz = best >= 0 ? SpectrumAnalyser::freqForBin(best) : 50.0f;
+        // roll-off: highest bin still within 36 dB (0.43 normalised) of the loudest bin
+        result.rollOffHz = 16000.0f;
+        for (int b = SpectrumAnalyser::kBins - 1; b >= 0; --b)
+            if (avg[size_t(b)] > peak - 36.0f / 84.0f) { result.rollOffHz = SpectrumAnalyser::freqForBin(b); break; }
+        return true;
+    }
+    Result result;
+private:
+    std::array<float, SpectrumAnalyser::kBins> avg {};
+    int frames = 0; float target = 6.0f, elapsed = 0.0f; bool active = false;
+};
 
 // The "field": a real-time audio spectrum (wet in colour, dry input as a ghost line, peak-hold
 // trace) with the EQ response drawn over it and cutoff handles.

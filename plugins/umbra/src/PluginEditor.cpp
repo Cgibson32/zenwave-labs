@@ -40,7 +40,15 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
 
     addAndMakeVisible(presetBar);
     addAndMakeVisible(modPanel);
+    addAndMakeVisible(pad);
+    addAndMakeVisible(glideBox); glideBox.addItemList(zwui::PadIDs::glideNames(), 1);
+    glideBox.setTooltip("Glide: how long the pad takes to return home after you let go (synced)");
+    glideAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, zwui::PadIDs::glide, glideBox);
     addAndMakeVisible(orbitButton);
+    addAndMakeVisible(learnButton);
+    learnButton.getProperties().set("chip", true);
+    learnButton.setTooltip("Learn: play the track for 6 seconds. Sets the wet Low Cut just above your sub and the High Cut where your top end ends" + juce::String(""" + (' , and Gravity under the sub' if plug=='umbra' else '') + """) + ", so the effect sits in this track.");
+    learnButton.onClick = [this] { if (! learner.isActive()) learner.start(6.0f); };
     orbitAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, zwui::OrbitBus::orbitParamId, orbitButton);
     orbitButton.setTooltip("Orbit: link with every other ZenWave plugin that has Orbit on. Freeze one, freeze them all - Drift's loop and Umbra's tail lock together.");
     allKnobs = { &preDelay, &size, &decay, &dark, &mix, &density, &motion, &gravity, &early, &duck, &width, &output, &motionRate, &bloom, &lowCut, &highCut, &tilt };
@@ -48,7 +56,7 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
 
     // Built-in manual + tooltips
     addAndMakeVisible(helpButton);
-    helpButton.getProperties().set("chip", true);
+    helpButton.getProperties().set("chip", true); helpButton.getProperties().set("book", true);
     helpButton.setTooltip("Manual: what every knob does, quick start and recipes");
     helpButton.onClick = [this] { manual.show(); };
     addChildComponent(manual);
@@ -113,6 +121,10 @@ void UmbraAudioProcessorEditor::timerCallback()
     scope.update(processor.stereo);
     presetBar.sync();
     modPanel.tick();
+    if (learner.feed(analyserIn.levels, dt)) applyLearn();
+    pad.setHome(float(decay.slider.getValue()), float(mix.slider.getValue()));
+    pad.tick();
+    learnButton.setButtonText(learner.isActive() ? "LEARNING " + juce::String(int(learner.progress() * 100)) + "%" : "LEARN");
     { const int n = processor.orbitLink.peers.load(); orbitButton.setButtonText(orbitButton.getToggleState() && n > 1 ? "ORBIT x" + juce::String(n) : "ORBIT"); }
     syncModRings();
     const bool msync = motionSyncButton.getToggleState();
@@ -137,7 +149,7 @@ void UmbraAudioProcessorEditor::paint(juce::Graphics& g)
     scope.draw(g, juce::Rectangle<float>(40 * s, 548 * s, 128 * s, 128 * s), lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::EqCurve eq { float(lowCut.slider.getValue()), float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
-    zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
+    zwui::drawEqField(g, juce::Rectangle<float>(320 * s, 552 * s, 278 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
@@ -153,6 +165,7 @@ void UmbraAudioProcessorEditor::resized()
     powerButton.setBounds(S(824), S(20), S(34), S(34));
     freezeButton.setBounds(S(752), S(300), S(84), S(26));
     orbitButton.setBounds(S(656), S(300), S(84), S(26));
+    learnButton.setBounds(S(744), S(536), S(100), S(17));
     modPanel.setBounds(S(22), S(700), S(836), S(170));
     modPanel.layoutScaled(s);
 
@@ -167,9 +180,22 @@ void UmbraAudioProcessorEditor::resized()
     x = S(32);
     for (auto* k : smalls) { k->layout(x, S(392), S(88), S(110), S(14)); x += S(92); }
 
+    pad.setBounds(S(184), S(550), S(122), S(106));
+    glideBox.setBounds(S(184), S(660), S(122), S(18));
     zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };
-    x = S(566);
-    for (auto* k : tone) { k->layout(x, S(572), S(90), S(84), S(12)); x += S(98); }
-    lowSlopeBox.setBounds(S(574), S(662), S(74), S(18));
-    highSlopeBox.setBounds(S(672), S(662), S(74), S(18));
+    x = S(610);
+    for (auto* k : tone) { k->layout(x, S(572), S(80), S(84), S(12)); x += S(84); }
+    lowSlopeBox.setBounds(S(614), S(662), S(72), S(18));
+    highSlopeBox.setBounds(S(698), S(662), S(72), S(18));
+}
+
+void UmbraAudioProcessorEditor::applyLearn()
+{
+    const auto r = learner.result;
+    if (! r.valid) return;
+    auto set = [this](const char* id, float plain) { if (auto* p = processor.apvts.getParameter(id)) { p->beginChangeGesture(); p->setValueNotifyingHost(p->convertTo0to1(plain)); p->endChangeGesture(); } };
+    set(ParamIDs::lowCut,  juce::jlimit(20.0f, 400.0f, r.subHz * 1.6f));          // repeats/tails stay off the sub
+    set(ParamIDs::highCut, juce::jlimit(3000.0f, 20000.0f, r.rollOffHz * 0.85f)); // nothing above where the track ends
+    set(ParamIDs::lowSlope, 2.0f);
+    set(ParamIDs::gravity, juce::jlimit(0.0f, 1.0f, (r.subHz * 1.5f - 40.0f) / 260.0f));   // 0..1 -> 40..300 Hz, sub passes dry
 }

@@ -5,6 +5,7 @@
 #include <zenwave_ui/Modulation.h>
 #include <zenwave_ui/PresetBank.h>
 #include <zenwave_ui/Orbit.h>
+#include <zenwave_ui/PerformPad.h>
 #include "Presets.h"
 
 namespace ParamIDs
@@ -80,6 +81,7 @@ public:
     zwui::StereoTap stereo;
     zwui::ModMatrix mod;
     zwui::OrbitLink orbitLink { apvts, ParamIDs::freeze };
+    zwui::PadEngine pad;   // X = decay, Y = mix (a reverb "throw")
     juce::AudioBuffer<float> wetScratch;   // post-EQ wet signal for the Field analyser
     zwui::PresetBank bank { apvts, "Umbra" };
     double currentSampleRate = 48000.0;

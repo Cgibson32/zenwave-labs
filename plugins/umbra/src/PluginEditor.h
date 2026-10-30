@@ -34,6 +34,9 @@ private:
     zwui::GalaxyScope scope;
     zwui::ModPanel modPanel { processor.apvts, processor.mod, lnf };
     zwui::PresetBar presetBar;
+    zwui::PerformPad pad { processor.apvts, processor.pad, lnf, "DECAY", "SEND" };
+    juce::ComboBox glideBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> glideAttach;
 
     juce::ToggleButton freezeButton { "FREEZE" }, motionSyncButton { "SYNC" }, powerButton;
     juce::ComboBox motionDivBox;
@@ -42,6 +45,9 @@ private:
     double lastTick = 0.0;
     std::vector<zwui::Knob*> allKnobs;
     juce::ToggleButton orbitButton { "ORBIT" };
+    juce::TextButton learnButton { "LEARN" };
+    zwui::Learner learner;
+    void applyLearn();
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> orbitAttach;
     juce::TextButton helpButton { "MANUAL" };
     juce::TooltipWindow tooltips { this, 650 };
