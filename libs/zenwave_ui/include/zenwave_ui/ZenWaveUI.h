@@ -586,3 +586,100 @@ inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const Spect
 }
 
 } // namespace zwui
+
+namespace zwui {
+
+// Galaxy scope: a vectorscope with persistence. Mid = vertical axis, Side = horizontal.
+// Wide material blooms into a nebula; mono collapses to a beam. A correlation ring
+// around the outside turns from accent2 (in phase) to magenta (out of phase).
+class GalaxyScope
+{
+public:
+    template <class Tap> void update(const Tap& tap)
+    {
+        tap.snapshot(L.data(), R.data());
+        double sLR = 0, sLL = 0, sRR = 0;
+        for (int i = 0; i < Tap::kPairs; ++i) { sLR += L[size_t(i)] * R[size_t(i)]; sLL += L[size_t(i)] * L[size_t(i)]; sRR += R[size_t(i)] * R[size_t(i)]; }
+        const double den = std::sqrt(sLL * sRR) + 1e-9;
+        const float corrNow = float(sLR / den);
+        correlation += (corrNow - correlation) * 0.15f;
+        level = float(std::sqrt((sLL + sRR) / (2.0 * Tap::kPairs)));
+    }
+
+    void draw(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour accent, juce::Colour accent2, float pulse)
+    {
+        const int w = int(r.getWidth()), h = int(r.getHeight());
+        if (w < 8 || h < 8) return;
+        if (persist.getWidth() != w || persist.getHeight() != h)
+            persist = juce::Image(juce::Image::ARGB, w, h, true);
+
+        // fade the persistence layer
+        {
+            juce::Graphics pg(persist);
+            pg.setColour(juce::Colours::black.withAlpha(0.22f));
+            pg.fillAll();   // ARGB with black alpha → darkens, keeps glow trails
+            // draw new points
+            const auto c = juce::Point<float>(w * 0.5f, h * 0.5f);
+            const float scale = juce::jmin(w, h) * 0.42f;
+            const float gain = level > 1e-4f ? juce::jlimit(1.0f, 6.0f, 0.35f / level) : 1.0f;  // auto-gain so quiet material still shows
+            for (int i = 0; i < 1024; i += 2)
+            {
+                const float l = L[size_t(i)] * gain, rr = R[size_t(i)] * gain;
+                const float mid = (l + rr) * 0.7071f, side = (l - rr) * 0.7071f;
+                const float x = c.x + juce::jlimit(-1.0f, 1.0f, side) * scale;
+                const float y = c.y - juce::jlimit(-1.0f, 1.0f, mid) * scale;
+                const float e = juce::jlimit(0.0f, 1.0f, std::sqrt(l * l + rr * rr));
+                pg.setColour(aurora(e, accent, accent2).withAlpha(0.35f + 0.5f * e));
+                pg.fillEllipse(x - 1.2f, y - 1.2f, 2.4f, 2.4f);
+                if ((i & 6) == 0) { pg.setColour(juce::Colours::white.withAlpha(0.25f * e)); pg.fillEllipse(x - 0.6f, y - 0.6f, 1.2f, 1.2f); }
+            }
+        }
+
+        // backdrop rings + axes
+        const auto c = r.getCentre();
+        const float R0 = juce::jmin(r.getWidth(), r.getHeight()) * 0.5f;
+        g.setColour(Palette::bg.withAlpha(0.6f));
+        g.fillEllipse(c.x - R0, c.y - R0, R0 * 2, R0 * 2);
+        g.setColour(juce::Colours::white.withAlpha(0.06f));
+        for (float k : { 0.33f, 0.66f }) g.drawEllipse(c.x - R0 * k, c.y - R0 * k, R0 * 2 * k, R0 * 2 * k, 1.0f);
+        g.drawLine(c.x - R0, c.y, c.x + R0, c.y, 1.0f);
+        g.drawLine(c.x, c.y - R0, c.x, c.y + R0, 1.0f);
+        // L / R diagonals
+        g.setColour(accent.withAlpha(0.18f));
+        g.drawLine(c.x - R0 * 0.707f, c.y - R0 * 0.707f, c.x + R0 * 0.707f, c.y + R0 * 0.707f, 1.0f);
+        g.drawLine(c.x + R0 * 0.707f, c.y - R0 * 0.707f, c.x - R0 * 0.707f, c.y + R0 * 0.707f, 1.0f);
+
+        // persistence image, clipped to the circle, with a soft glow pass
+        {
+            juce::Graphics::ScopedSaveState ss(g);
+            juce::Path clip; clip.addEllipse(c.x - R0 + 2, c.y - R0 + 2, R0 * 2 - 4, R0 * 2 - 4);
+            g.reduceClipRegion(clip);
+            g.setOpacity(0.55f);
+            g.drawImage(persist, r.expanded(3.0f), juce::RectanglePlacement::stretchToFit);  // slightly enlarged = glow
+            g.setOpacity(1.0f);
+            g.drawImageAt(persist, int(r.getX()), int(r.getY()));
+        }
+
+        // correlation ring: arc from top, length = |corr|, colour by sign
+        const float corr = juce::jlimit(-1.0f, 1.0f, correlation);
+        juce::Path ring; ring.addCentredArc(c.x, c.y, R0 - 2.0f, R0 - 2.0f, 0.0f, -juce::MathConstants<float>::pi * std::abs(corr), juce::MathConstants<float>::pi * std::abs(corr), true);
+        const auto ringCol = corr >= 0 ? accent2 : Palette::magenta;
+        glowStroke(g, ring, ringCol.withAlpha(0.9f), 2.0f, 0.8f + pulse * 0.6f);
+        g.setColour(Palette::cardEdge);
+        g.drawEllipse(c.x - R0, c.y - R0, R0 * 2, R0 * 2, 1.0f);
+
+        g.setFont(juce::Font(juce::FontOptions(8.5f, juce::Font::bold)));
+        g.setColour(Palette::dim);
+        g.drawText("L", int(c.x - R0 * 0.85f), int(c.y - R0 * 0.95f), 12, 10, juce::Justification::centred);
+        g.drawText("R", int(c.x + R0 * 0.85f) - 12, int(c.y - R0 * 0.95f), 12, 10, juce::Justification::centred);
+        g.setColour(ringCol);
+        g.drawText(juce::String(corr, 2), r.toNearestInt().removeFromBottom(12), juce::Justification::centred);
+    }
+
+private:
+    std::array<float, 1024> L {}, R {};
+    juce::Image persist;
+    float correlation = 1.0f, level = 0.0f;
+};
+
+} // namespace zwui

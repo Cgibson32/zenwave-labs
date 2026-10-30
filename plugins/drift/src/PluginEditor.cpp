@@ -45,9 +45,9 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     };
 
     setResizable(true, true);
-    setResizeLimits(704, 528, 1408, 1056);
-    getConstrainer()->setFixedAspectRatio(880.0 / 660.0);
-    setSize(880, 660);
+    setResizeLimits(704, 560, 1408, 1120);
+    getConstrainer()->setFixedAspectRatio(880.0 / 700.0);
+    setSize(880, 700);
     lastTick = juce::Time::getMillisecondCounterHiRes();
     startTimerHz(30);
 }
@@ -76,6 +76,7 @@ void DriftAudioProcessorEditor::timerCallback()
     stage.tick(processor.motion, dt);
     lnf.pulse = processor.motion.pulse;
     analyser.update(processor.spectrum, processor.currentSampleRate);
+    scope.update(processor.stereo);
 
     if (processor.getCurrentProgram() != lastPreset)
     {
@@ -103,10 +104,11 @@ void DriftAudioProcessorEditor::paint(juce::Graphics& g)
     zwui::drawHeader(g, r, s, "DRIFT", "LO-FI SPACE ECHO", lnf.accent, lnf.accentHi, lnf.accent2);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 84 * s, 836 * s, 262 * s), "ECHO", lnf.accent, lnf.accent2, s);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 358 * s, 836 * s, 160 * s), "DEEP SPACE", lnf.accent2, lnf.accent, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 530 * s, 836 * s, 118 * s), "FIELD", lnf.accent, lnf.accent2, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 530 * s, 836 * s, 158 * s), "FIELD", lnf.accent, lnf.accent2, s);
+    scope.draw(g, juce::Rectangle<float>(40 * s, 548 * s, 128 * s, 128 * s), lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::EqCurve eq { lowCut.slider.getValue() > 0 ? float(lowCut.slider.getValue()) : 20.0f, float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
-    zwui::drawEqField(g, juce::Rectangle<float>(40 * s, 548 * s, 470 * s, 90 * s), analyser, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
+    zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::drawOrbit(g, { 470 * s, 44 * s }, 26 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
@@ -136,8 +138,8 @@ void DriftAudioProcessorEditor::resized()
 
     // Tone: field display on the left, cuts + tilt on the right
     zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };
-    x = S(530);
-    for (auto* k : tone) { k->layout(x, S(560), S(84), S(70), S(12)); x += S(100); }
-    lowSlopeBox.setBounds(S(538), S(632), S(68), S(16));
-    highSlopeBox.setBounds(S(638), S(632), S(68), S(16));
+    x = S(566);
+    for (auto* k : tone) { k->layout(x, S(572), S(90), S(84), S(12)); x += S(98); }
+    lowSlopeBox.setBounds(S(574), S(662), S(74), S(18));
+    highSlopeBox.setBounds(S(672), S(662), S(74), S(18));
 }

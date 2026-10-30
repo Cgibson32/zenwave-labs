@@ -132,3 +132,32 @@ private:
 };
 
 } // namespace zwui
+
+namespace zwui {
+
+// Stereo tap for the galaxy scope: interleaved L/R pairs.
+class StereoTap
+{
+public:
+    static constexpr int kPairs = 1024;
+    void push(const juce::AudioBuffer<float>& b)
+    {
+        if (b.getNumChannels() < 1) return;
+        const int n = b.getNumSamples();
+        const float* l = b.getReadPointer(0);
+        const float* r = b.getNumChannels() > 1 ? b.getReadPointer(1) : l;
+        int w = writePos.load(std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i) { L[size_t(w)] = l[i]; R[size_t(w)] = r[i]; w = (w + 1) & (kPairs - 1); }
+        writePos.store(w, std::memory_order_release);
+    }
+    void snapshot(float* outL, float* outR) const
+    {
+        const int w = writePos.load(std::memory_order_acquire);
+        for (int i = 0; i < kPairs; ++i) { const size_t k = size_t((w + i) & (kPairs - 1)); outL[i] = L[k]; outR[i] = R[k]; }
+    }
+private:
+    std::array<float, kPairs> L {}, R {};
+    std::atomic<int> writePos { 0 };
+};
+
+} // namespace zwui

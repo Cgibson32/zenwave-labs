@@ -176,6 +176,7 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
     spectrum.push(buffer);
+    stereo.push(buffer);
 }
 
 void DriftAudioProcessor::setCurrentProgram(int index)

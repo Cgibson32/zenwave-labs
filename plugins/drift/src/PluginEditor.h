@@ -26,6 +26,7 @@ private:
     juce::ComboBox lowSlopeBox, highSlopeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;
     zwui::SpectrumAnalyser analyser;
+    zwui::GalaxyScope scope;
 
     juce::ToggleButton syncButton { "SYNC" }, pingPongButton { "PING-PONG" }, freezeButton { "FREEZE" },
                        wobbleSyncButton { "SYNC" }, powerButton;

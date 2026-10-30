@@ -64,6 +64,7 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     zwui::Motion motion;
     zwui::SpectrumTap spectrum;
+    zwui::StereoTap stereo;
     double currentSampleRate = 48000.0;
 
 private:

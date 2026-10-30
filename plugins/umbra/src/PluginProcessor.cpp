@@ -123,6 +123,7 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
     spectrum.push(buffer);
+    stereo.push(buffer);
 }
 
 void UmbraAudioProcessor::setCurrentProgram(int index)
