@@ -38,7 +38,7 @@ DriftAudioProcessor::DriftAudioProcessor()
     mod.attach(apvts, driftModTargets());
     pad.attach(apvts);
     bank.setAlwaysLocked({ zwui::PadIDs::x, zwui::PadIDs::y, zwui::PadIDs::hold, zwui::PadIDs::glide });
-    bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze });
+    bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze, zwui::OrbitBus::orbitParamId });
     bank.setSafeRange(ParamIDs::feedback, 0.0f, 0.82f);
     bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
     bank.setSafeRange(ParamIDs::highCut, 2500.0f, 20000.0f);
@@ -108,6 +108,7 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::color, 1 }, "Color", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return v < -0.01f ? "Dark " + juce::String(juce::roundToInt(-v * 100)) + " %" : v > 0.01f ? "Thin " + juce::String(juce::roundToInt(v * 100)) + " %" : juce::String("Off"); })));
     zwui::addModParams(params, driftModTargets());
+    zwui::addOrbitParam(params);
     zwui::addPadParams(params);
     return { params.begin(), params.end() };
 }

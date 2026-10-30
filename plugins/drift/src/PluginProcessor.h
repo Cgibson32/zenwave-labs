@@ -4,6 +4,7 @@
 #include <zenwave_ui/ProcessorHelpers.h>
 #include <zenwave_ui/Modulation.h>
 #include <zenwave_ui/PresetBank.h>
+#include <zenwave_ui/Orbit.h>
 #include <zenwave_ui/PerformPad.h>
 #include "Presets.h"
 
@@ -82,6 +83,7 @@ public:
     zwui::SpectrumTap spectrum, spectrumIn;
     zwui::StereoTap stereo;
     zwui::ModMatrix mod;
+    zwui::OrbitLink orbitLink { apvts, ParamIDs::freeze };
     zwui::PadEngine pad;
     // Perform-pad mapping (shared with the editor so "home" draws in the right place)
     float padTimeMs(float x) const;

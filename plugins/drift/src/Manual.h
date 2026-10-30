@@ -22,6 +22,7 @@ namespace DriftManual
               { "AGE", "Tape wear. Rolls off highs, adds hiss when there's signal, saturates the loop and adds head-bump low mids. Each repeat gets a little older than the last, like real tape.", "age" },
               { "SPACE", "Sends the repeats (and a touch of the input) into the built-in reverb. 0 = dry echo, 100 % = the repeats dissolve into a wash.", "space" },
               { "PING-PONG", "Alternates repeats left/right. Turn off for a centred, mono-compatible echo." },
+              { "ORBIT", "Links this plugin with every other ZenWave plugin on your system that has Orbit on. Freeze one and they all freeze together (Drift's loop and Umbra's tail lock at the same instant). The button shows how many are in orbit." },
               { "FREEZE", "Captures what's in the loop and holds it forever, clean. Great for drops and transitions - set it, then sweep the filters. Automate it in your DAW." },
               { "MIX", "Dry/wet balance. The dry path is untouched.", "mix" } } });
 

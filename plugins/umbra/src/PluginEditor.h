@@ -41,6 +41,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> motionDivAttach;
     double lastTick = 0.0;
     std::vector<zwui::Knob*> allKnobs;
+    juce::ToggleButton orbitButton { "ORBIT" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> orbitAttach;
     juce::TextButton helpButton { "MANUAL" };
     juce::TooltipWindow tooltips { this, 650 };
     zwui::ManualOverlay manual { lnf };   // last: sits on top of everything

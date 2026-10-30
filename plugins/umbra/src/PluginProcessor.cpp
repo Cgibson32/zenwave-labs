@@ -18,7 +18,7 @@ UmbraAudioProcessor::UmbraAudioProcessor()
 {
     for (int i = 0; i < 23; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
     mod.attach(apvts, umbraModTargets());
-    bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze });
+    bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze, zwui::OrbitBus::orbitParamId });
     bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
     bank.setSafeRange(ParamIDs::highCut, 2500.0f, 20000.0f);
     bank.setSafeRange(ParamIDs::width, 0.6f, 1.5f);
@@ -75,6 +75,7 @@ APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
     params.push_back(pct(ParamIDs::bloom, "Bloom", 0.0f));
     zwui::addModParams(params, umbraModTargets());
+    zwui::addOrbitParam(params);
     return { params.begin(), params.end() };
 }
 

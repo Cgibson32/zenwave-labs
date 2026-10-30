@@ -40,6 +40,9 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
 
     addAndMakeVisible(presetBar);
     addAndMakeVisible(modPanel);
+    addAndMakeVisible(orbitButton);
+    orbitAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, zwui::OrbitBus::orbitParamId, orbitButton);
+    orbitButton.setTooltip("Orbit: link with every other ZenWave plugin that has Orbit on. Freeze one, freeze them all - Drift's loop and Umbra's tail lock together.");
     allKnobs = { &preDelay, &size, &decay, &dark, &mix, &density, &motion, &gravity, &early, &duck, &width, &output, &motionRate, &bloom, &lowCut, &highCut, &tilt };
     installLocks();
 
@@ -110,6 +113,7 @@ void UmbraAudioProcessorEditor::timerCallback()
     scope.update(processor.stereo);
     presetBar.sync();
     modPanel.tick();
+    { const int n = processor.orbitLink.peers.load(); orbitButton.setButtonText(orbitButton.getToggleState() && n > 1 ? "ORBIT x" + juce::String(n) : "ORBIT"); }
     syncModRings();
     const bool msync = motionSyncButton.getToggleState();
     motionDivBox.setEnabled(msync); motionDivBox.setAlpha(msync ? 1.0f : 0.4f);
@@ -148,6 +152,7 @@ void UmbraAudioProcessorEditor::resized()
     presetBar.layoutScaled(s, 424);
     powerButton.setBounds(S(824), S(20), S(34), S(34));
     freezeButton.setBounds(S(752), S(300), S(84), S(26));
+    orbitButton.setBounds(S(656), S(300), S(84), S(26));
     modPanel.setBounds(S(22), S(700), S(836), S(170));
     modPanel.layoutScaled(s);
 

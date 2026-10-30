@@ -20,6 +20,7 @@ namespace UmbraManual
               { "DARK", "Umbra's signature tone control. Left = open and airy, right = pitch black: highs die fast, lows and low mids linger.", "dark" },
               { "MIX", "Dry/wet balance. The dry path is untouched.", "mix" },
               { "SYNC + division / MOTION RATE", "The internal modulation that keeps the tail alive can run free (MOTION RATE multiplier) or lock to the tempo so the slow swirl completes once per division." },
+              { "ORBIT", "Links this plugin with every other ZenWave plugin on your system that has Orbit on. Freeze one and they all freeze together (Drift's loop and Umbra's tail lock at the same instant). The button shows how many are in orbit." },
               { "FREEZE", "Holds the current tail forever as a clean, infinite pad. Automate it for breakdowns; sweep DARK and the filters while frozen." } } });
 
         v.push_back({ "SHAPE", "Fine control of the tail's behaviour.",

@@ -42,6 +42,9 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
 
     addAndMakeVisible(presetBar);
     addAndMakeVisible(modPanel);
+    addAndMakeVisible(orbitButton);
+    orbitAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, zwui::OrbitBus::orbitParamId, orbitButton);
+    orbitButton.setTooltip("Orbit: link with every other ZenWave plugin that has Orbit on. Freeze one, freeze them all - Drift's loop and Umbra's tail lock together.");
     addAndMakeVisible(pad);
     addAndMakeVisible(glideBox); glideBox.addItemList(zwui::PadIDs::glideNames(), 1);
     glideBox.setTooltip("Glide: how long the pad takes to return home after you let go (synced)");
@@ -119,6 +122,7 @@ void DriftAudioProcessorEditor::timerCallback()
     scope.update(processor.stereo);
     presetBar.sync();
     modPanel.tick();
+    { const int n = processor.orbitLink.peers.load(); orbitButton.setButtonText(orbitButton.getToggleState() && n > 1 ? "ORBIT x" + juce::String(n) : "ORBIT"); }
     pad.setHome(processor.padXForTime(float(time.slider.getValue())), processor.padYForFeedback(float(feedback.slider.getValue())));
     pad.setColumns(syncButton.getToggleState() ? 9 : 0);
     pad.tick();
@@ -164,6 +168,7 @@ void DriftAudioProcessorEditor::resized()
     presetBar.layoutScaled(s, 424);
     powerButton.setBounds(S(824), S(20), S(34), S(34));
     freezeButton.setBounds(S(752), S(300), S(84), S(26));
+    orbitButton.setBounds(S(656), S(300), S(84), S(26));
     modPanel.setBounds(S(22), S(700), S(836), S(170));
     modPanel.layoutScaled(s);
 

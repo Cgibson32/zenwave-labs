@@ -3,6 +3,7 @@
 // above +12 dBFS, or discontinuities (clicks) larger than 0.5 between samples while the
 // signal is quiet. Also checks preset recall is deterministic and state round-trips.
 #include <JuceHeader.h>
+#include <zenwave_ui/Orbit.h>
 #include <cmath>
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
@@ -180,6 +181,21 @@ int main()
             QA_CHECK(total.clicks <= 2, "perform pad throws had %d clicks", total.clicks);
             std::printf("  pad    3 throws + glide home       peak %5.2f  clicks %d\n", total.peak, total.clicks);
         }
+    }
+
+    // 7) Orbit bus: two instances see each other's freeze and heartbeat
+    {
+        zwui::OrbitBus a, bb;
+        QA_CHECK(a.ok() && bb.ok(), "orbit bus failed to map shared memory");
+        bool on = false;
+        a.publishFreeze(true);
+        QA_CHECK(bb.pollFreeze(on) && on, "orbit: B did not receive A's freeze");
+        QA_CHECK(! a.pollFreeze(on), "orbit: A received its own freeze");
+        bb.publishFreeze(false);
+        QA_CHECK(a.pollFreeze(on) && ! on, "orbit: A did not receive B's unfreeze");
+        a.heartbeat(true); bb.heartbeat(true);
+        QA_CHECK(a.heartbeat(true) >= 2, "orbit: heartbeat count %d (expected >= 2)", a.heartbeat(true));
+        std::printf("  orbit  freeze sync + heartbeat     ok\n");
     }
 
     std::printf("%s (%d failure%s)\n", failures ? "QA FAILED" : "QA PASSED", failures, failures == 1 ? "" : "s");
