@@ -36,6 +36,7 @@ struct UmbraParams
     int   lowSlope   = 1;       // 0=6, 1=12, 2=24, 3=48 dB/oct
     int   highSlope  = 1;
     float tilt       = 0.0f;    // -1..1 (dark..bright)
+    float bloom      = 0.0f;    // 0..1 loud input → longer decay (signature "opening" tail)
 };
 
 class UmbraEngine
@@ -80,6 +81,7 @@ public:
     {
         params = p;
         reverb.setSize(p.size);
+        baseDecay = p.decay;
         reverb.setDecay(p.decay);
         reverb.setDiffusion(p.density);
         reverb.setModDepth(p.motion);
@@ -150,9 +152,11 @@ public:
             // Dark tilt: cut highs, nudge low-mids
             wetL = darken(0, wetL); wetR = darken(1, wetR);
 
-            // Duck wet by dry level
+            // Duck wet by dry level; Bloom pushes decay up with the same envelope
             const float level = std::max(std::fabs(dryL), std::fabs(dryR));
             duckEnv += (level - duckEnv) * (level > duckEnv ? duckAttack : duckRelease);
+            if (params.bloom > 0.001f && (++bloomCounter & 63) == 0)
+                reverb.setDecay(std::min(1.0f, baseDecay + params.bloom * 0.6f * std::min(1.0f, duckEnv * 2.5f)));
             const float duckGain = 1.0f - duckAmount * std::min(1.0f, duckEnv * 2.5f);
             wetL *= duckGain; wetR *= duckGain;
 
@@ -163,6 +167,9 @@ public:
             // Width
             const float mid = 0.5f * (wetL + wetR), side = 0.5f * (wetL - wetR) * wid;
             wetL = mid + side; wetR = mid - side;
+
+            // Soft ceiling keeps freeze / self-oscillation / long tails from spiking the master
+            wetL = softCeiling(wetL); wetR = softCeiling(wetR);
 
             // Equal-power mix; sub band always passes dry
             const float a = std::cos(mix * kPi * 0.5f), b = std::sin(mix * kPi * 0.5f);
@@ -198,6 +205,7 @@ private:
     OnePole tiltLP[2], tiltHP[2];
     float tiltAmount = 0.5f;
     float duckAmount = 0.0f, duckEnv = 0.0f, duckAttack = 0.01f, duckRelease = 0.0001f;
+    float baseDecay = 0.6f; unsigned bloomCounter = 0;
     CutFilter lowCut[2], highCut[2];
     TiltEQ tiltEq[2];
     Smoother smMix, smOut, smWidth, smPre, smEarly;

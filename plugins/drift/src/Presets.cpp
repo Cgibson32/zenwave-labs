@@ -38,8 +38,8 @@ namespace Presets
         { "Quarter Note Canyon",       "Rhythmic",    0.0f, true,  8, 0.60f, 0.20f, 0.40f, 0.50f, 0.75f, 0.70f, 1.20f,  0.10f, true,  0.45f, 0.0f },
 
         // --- FX / Sound Design ---
-        { "Self-Oscillate Riser",      "FX",        180.0f, false, 5, 1.05f, 0.40f, 0.50f, 0.40f, 0.60f, 0.60f, 1.00f,  0.00f, false, 0.80f, -6.0f },
-        { "Infinite Freeze Pad",       "FX",        500.0f, false, 5, 1.00f, 0.30f, 0.30f, 1.00f, 1.00f, 1.00f, 1.40f,  0.00f, true,  1.00f, -3.0f },
+        { "Self-Oscillate Riser",      "FX",        180.0f, false, 5, 1.08f, 0.40f, 0.60f, 0.40f, 0.60f, 0.60f, 1.00f,  0.00f, false, 0.85f, 0.0f },
+        { "Infinite Freeze Pad",       "FX",        500.0f, false, 5, 0.90f, 0.30f, 0.20f, 1.00f, 1.00f, 1.00f, 1.40f,  0.00f, true,  1.00f, -3.0f },
         { "Transition Sweep",          "FX",        260.0f, false, 5, 0.90f, 0.70f, 0.60f, 0.70f, 0.80f, 0.75f, 1.50f,  0.50f, true,  0.75f, -3.0f },
         { "Impact Tail",               "FX",      1200.0f, false, 5, 0.70f, 0.20f, 0.45f, 0.90f, 1.00f, 0.90f, 1.30f,  0.00f, true,  0.70f, 0.0f },
         { "Alien Transmission",        "FX",         60.0f, false, 5, 0.88f, 0.90f, 0.75f, 0.30f, 0.40f, 0.50f, 1.50f, -0.60f, true,  0.60f, -3.0f },
@@ -79,5 +79,16 @@ namespace Presets
         setParam(apvts, ParamIDs::freeze,     (juce::String(p.name) == "Infinite Freeze Pad") ? 1.0f : 0.0f);
         setParam(apvts, ParamIDs::mix,        p.mix);
         setParam(apvts, ParamIDs::output,     p.outputDb);
+        // Newer parameters not stored in the preset table: deterministic defaults
+        setParam(apvts, ParamIDs::power,      1.0f);
+        setParam(apvts, ParamIDs::wobbleSync, 0.0f);
+        setParam(apvts, ParamIDs::wobbleDiv,  10.0f);
+        setParam(apvts, ParamIDs::wobbleRate, 0.45f);
+        setParam(apvts, ParamIDs::lowCut,     20.0f);
+        setParam(apvts, ParamIDs::highCut,    20000.0f);
+        setParam(apvts, ParamIDs::lowSlope,   1.0f);
+        setParam(apvts, ParamIDs::highSlope,  1.0f);
+        setParam(apvts, ParamIDs::tilt,       0.0f);
+        setParam(apvts, ParamIDs::color,      juce::String(p.name) == "Deep Dub Chamber" ? -0.45f : (juce::String(p.name) == "Alien Transmission" ? 0.6f : 0.0f));
     }
 }

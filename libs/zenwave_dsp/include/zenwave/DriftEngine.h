@@ -38,6 +38,7 @@ struct DriftParams
     int   lowSlope   = 1;       // 0=6, 1=12, 2=24, 3=48 dB/oct
     int   highSlope  = 1;
     float tilt       = 0.0f;    // -1..1 (dark..bright)
+    float color      = 0.0f;    // -1..1 feedback colour: negative = resonant lowpass sweeps down, positive = highpass thins out
 };
 
 class DriftEngine
@@ -55,6 +56,7 @@ public:
             ageHP[c].setHighpass(60.0f);
             sat[c].setSampleRate(sr);
             sat[c].setCharacter(Saturator::Character::Tape);
+            colorF[c].setSampleRate(sr);
             preHP[c].setSampleRate(sr);
             preHP[c].setHighpass(80.0f);
         }
@@ -66,8 +68,9 @@ public:
             highCut[c].setSampleRate(sr); highCut[c].setType(CutFilter::Type::Highcut);
             tiltEq[c].setSampleRate(sr);
         }
-        for (auto* s : { &smTime, &smFeedback, &smMix, &smSpace, &smOut, &smWidth })
+        for (auto* s : { &smTime, &smFeedback, &smMix, &smSpace, &smOut, &smWidth, &smFreeze })
         { s->setSampleRate(sr); s->setTime(30.0f); }
+        smFreeze.reset(0.0f);
         smTime.setTime(120.0f);     // slower: avoids pitch zips on big time jumps
         setParams(params);
         smTime.reset(msToSamples(params.timeMs));
@@ -81,7 +84,7 @@ public:
 
     void reset() noexcept
     {
-        for (int c = 0; c < 2; ++c) { delay[c].reset(); ageLP[c].reset(); ageHP[c].reset(); sat[c].reset(); preHP[c].reset(); }
+        for (int c = 0; c < 2; ++c) { delay[c].reset(); ageLP[c].reset(); ageHP[c].reset(); sat[c].reset(); preHP[c].reset(); colorF[c].reset(); }
         reverb.reset();
     }
 
@@ -102,7 +105,11 @@ public:
             wf[c].setWowRate(p.wobbleHz);
             ageLP[c].setLowpass(lpHz);
             sat[c].setDrive(p.age * 0.55f);
-            sat[c].setEmphasis(p.age * 0.25f);
+            sat[c].setEmphasis(p.age * 0.6f);
+            sat[c].setHeadBump(p.age);
+            colorF[c].setMode(p.color < 0.0f ? SVF::Mode::Lowpass : SVF::Mode::Highpass);
+            colorF[c].setCutoff(p.color < 0.0f ? lerp(12000.0f, 600.0f, -p.color) : lerp(60.0f, 1500.0f, p.color));
+            colorF[c].setResonance(0.7f + std::fabs(p.color) * 1.6f);
         }
         hissGain = p.age * p.age * 0.004f;
         reverb.setSize(p.size);
@@ -136,33 +143,56 @@ public:
             const float tL = t * (1.0f - params.spread * 0.25f) + wf[0].nextOffsetSamples();
             const float tR = t * (1.0f + params.spread * 0.25f) + wf[1].nextOffsetSamples();
 
-            const float rdL = delay[0].read(std::max(1.0f, tL));
-            const float rdR = delay[1].read(std::max(1.0f, tR));
+            float rdL = delay[0].read(std::max(1.0f, tL));
+            float rdR = delay[1].read(std::max(1.0f, tR));
 
-            // Age the repeats: tone, hiss, tape saturation
-            float agedL = ageAndSaturate(0, rdL);
-            float agedR = ageAndSaturate(1, rdR);
+            // Freeze seam blend: the captured loop has a natural discontinuity where "now" meets
+            // "one loop ago". While frozen we soften that seam with a 10 ms raised-cosine dip.
+            {
+                const bool frozen = smFreeze.getTarget() > 0.5f;
+                if (frozen && ! wasFrozen) { seamLoopLen = std::max(64.0f, t); seamPos = 0.0f; }
+                wasFrozen = frozen;
+                if (frozen)
+                {
+                    seamPos += 1.0f; if (seamPos >= seamLoopLen) seamPos -= seamLoopLen;
+                    const float half = 0.005f * float(sampleRate);
+                    const float d = std::min(seamPos, seamLoopLen - seamPos);   // distance to seam
+                    if (d < half)
+                    {
+                        const float w = 0.5f * (1.0f + std::cos(kPi * d / half));   // 1 at seam → 0 at edge
+                        const float gdip = 1.0f - 0.85f * w;
+                        rdL *= gdip; rdR *= gdip;
+                    }
+                }
+            }
 
-            // Feedback routing
-            float inL = params.freeze ? 0.0f : preHP[0].process(dryL);
-            float inR = params.freeze ? 0.0f : preHP[1].process(dryR);
-            const float fbGain = params.freeze ? 1.0f : fb;
+            // Freeze glides: input fades out, loop gain glides to unity, aging fades out
+            const float fz = smFreeze.next();
+
+            // Age the repeats: tone, hiss, tape saturation (bypassed while frozen so the
+            // captured audio recirculates transparently instead of squaring up)
+            float agedL = lerp(ageAndSaturate(0, rdL), rdL, fz);
+            float agedR = lerp(ageAndSaturate(1, rdR), rdR, fz);
+
+            float inL = preHP[0].process(dryL) * (1.0f - fz);
+            float inR = preHP[1].process(dryR) * (1.0f - fz);
+            const float fbGain = lerp(fb, 1.0f, fz);
 
             float wL, wR;
             if (params.pingPong) { wL = inL + agedR * fbGain; wR = inR + agedL * fbGain; }
             else                 { wL = inL + agedL * fbGain; wR = inR + agedR * fbGain; }
 
-            // Soft limit so feedback > 1 blooms instead of exploding
-            delay[0].write(fastTanh(wL));
-            delay[1].write(fastTanh(wR));
+            // Soft limit so feedback > 1 blooms instead of exploding (transparent when frozen)
+            delay[0].write(lerp(fastTanh(wL), softCeiling(wL), fz));
+            delay[1].write(lerp(fastTanh(wR), softCeiling(wR), fz));
 
             // Reverb send from the echo
             float rvL = 0.0f, rvR = 0.0f;
             // Send both the (highpassed) input and the repeats, so short notes still get space
             reverb.process((inL * 0.5f + agedL) * spc, (inR * 0.5f + agedR) * spc, rvL, rvR);
 
-            float wetL = (agedL + rvL * 1.6f) * 0.8f;
-            float wetR = (agedR + rvR * 1.6f) * 0.8f;
+            float wetL = (agedL + rvL * 1.3f) * 0.8f;
+            float wetR = (agedR + rvR * 1.3f) * 0.8f;
 
             // Wet EQ: cuts + tilt
             wetL = tiltEq[0].process(highCut[0].process(lowCut[0].process(wetL)));
@@ -172,6 +202,9 @@ public:
             const float mid  = 0.5f * (wetL + wetR);
             const float side = 0.5f * (wetL - wetR) * wid;
             wetL = mid + side; wetR = mid - side;
+
+            // Soft ceiling keeps freeze / self-oscillation / long tails from spiking the master
+            wetL = softCeiling(wetL); wetR = softCeiling(wetR);
 
             // Equal-power dry/wet
             const float a = std::cos(mix * kPi * 0.5f);
@@ -194,6 +227,7 @@ private:
     {
         x = ageLP[c].process(x);
         x = ageHP[c].process(x);
+        if (std::fabs(params.color) > 0.001f) x = colorF[c].process(x);
         // Tape hiss rides on the signal (ducked when the tape is "quiet"),
         // so silence stays silent and busy repeats get grit.
         env[c] += (std::fabs(x) - env[c]) * (std::fabs(x) > env[c] ? 0.01f : 0.0005f);
@@ -212,14 +246,16 @@ private:
     DelayLine  delay[2];
     WowFlutter wf[2];
     OnePole    ageLP[2], ageHP[2], preHP[2];
+    SVF        colorF[2];
     Saturator  sat[2];
     SpaceReverb reverb;
     Noise noise { 0x1234567u };
     float hissGain = 0.0f;
     float env[2] { 0.0f, 0.0f };
+    bool  wasFrozen = false; float seamPos = 0.0f, seamLoopLen = 24000.0f;
     CutFilter lowCut[2], highCut[2];
     TiltEQ tiltEq[2];
-    Smoother smTime, smFeedback, smMix, smSpace, smOut, smWidth;
+    Smoother smTime, smFeedback, smMix, smSpace, smOut, smWidth, smFreeze;
     float scratchR[8192] {};
 };
 

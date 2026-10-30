@@ -47,6 +47,7 @@ public:
         for (int c = 0; c < 2; ++c) for (int i = 0; i < 2; ++i) outAP[c][i].prepare(sr, 0.03f);
         loopHP.setSampleRate(sr);
         loopHP.setHighpass(90.0f);
+        freezeCoeff = 1.0f - std::exp(-1.0f / (0.03f * float(sr)));
         setModRate(1.0f);
         setSize(0.6f);
         setDecaySeconds(3.0f);
@@ -87,7 +88,7 @@ public:
     {
         for (int i = 0; i < kLines; ++i) lfo[i].setRate((0.09f + 0.031f * i) * clampf(mult, 0.1f, 8.0f));
     }
-    void setFreeze(bool f) noexcept { freeze = f; }
+    void setFreeze(bool f) noexcept { freezeTarget = f ? 1.0f : 0.0f; }
 
     void process(float inL, float inR, float& outL, float& outR) noexcept
     {
@@ -115,13 +116,17 @@ public:
             sum += s;
         }
 
+        // Freeze glides in over ~30 ms so engaging it never steps the loop
+        freezeAmt += (freezeTarget - freezeAmt) * freezeCoeff;
+        const float fz = freezeAmt;
+
         // Householder feedback: y_i = v_i - (2/N)·Σv
         const float k = (2.0f / kLines) * sum;
         for (int i = 0; i < kLines; ++i)
         {
-            const float g = freeze ? 0.9995f : gain[i];
-            float y = (v[i] - k) * g + (freeze ? 0.0f : xs[i & 1] * kInputSign[i] * 0.7f);
-            if (freeze) y = fastTanh(y);          // only clamp when pinned near unity
+            const float g = lerp(gain[i], 0.9995f, fz);
+            float y = (v[i] - k) * g + xs[i & 1] * kInputSign[i] * inputGain * (1.0f - fz);
+            if (fz > 0.001f) y = lerp(y, fastTanh(y), fz);   // clamp only when pinned near unity
             lines[i].write(y);
         }
 
@@ -137,11 +142,17 @@ private:
     void updateGains() noexcept
     {
         // g = 10^(-3 * delay_seconds / RT60)
+        float gm = 0.0f;
         for (int i = 0; i < kLines; ++i)
         {
             const float dSec = baseDelay[i] / static_cast<float>(sampleRate);
             gain[i] = std::pow(10.0f, -3.0f * dSec / rt60);
+            gm += gain[i];
         }
+        gm /= kLines;
+        // Steady-state energy of a feedback loop grows like 1/(1-g²); compensate so a
+        // 24 s tail sits at the same level as a 1 s tail with continuous input.
+        inputGain = 0.7f * std::sqrt(std::max(0.02f, 1.0f - gm * gm)) + 0.12f;
     }
 
     static float allpassFrac(DelayLine& dl, float x, float delaySamples, float g) noexcept
@@ -165,8 +176,8 @@ private:
     static constexpr float kInputSign[kLines]  = { 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f };
 
     double sampleRate = 44100.0;
-    float size = 0.6f, rt60 = 3.0f, modDepth = 0.0f, diffusion = 0.65f;
-    bool  freeze = false;
+    float size = 0.6f, rt60 = 3.0f, modDepth = 0.0f, diffusion = 0.65f, inputGain = 0.5f;
+    float freezeTarget = 0.0f, freezeAmt = 0.0f, freezeCoeff = 0.001f;
     std::array<DelayLine, kLines> lines;
     DelayLine                     inAP[2][4];
     DelayLine                     outAP[2][2];

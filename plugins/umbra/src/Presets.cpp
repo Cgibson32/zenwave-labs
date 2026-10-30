@@ -68,5 +68,16 @@ namespace Presets
         setParam(apvts, ParamIDs::mix,      p.mix);
         setParam(apvts, ParamIDs::output,   p.outputDb);
         setParam(apvts, ParamIDs::freeze,   p.freeze ? 1.0f : 0.0f);
+        setParam(apvts, ParamIDs::power,      1.0f);
+        setParam(apvts, ParamIDs::motionSync, 0.0f);
+        setParam(apvts, ParamIDs::motionDiv,  11.0f);
+        setParam(apvts, ParamIDs::motionRate, 1.0f);
+        setParam(apvts, ParamIDs::lowCut,     20.0f);
+        setParam(apvts, ParamIDs::highCut,    20000.0f);
+        setParam(apvts, ParamIDs::lowSlope,   1.0f);
+        setParam(apvts, ParamIDs::highSlope,  1.0f);
+        setParam(apvts, ParamIDs::tilt,       0.0f);
+        const juce::String n(p.name);
+        setParam(apvts, ParamIDs::bloom, (n == "Umbra (Signature)" || n == "Pre-Drop Black Hole" || n == "Impact Bloom") ? 0.6f : (n == "Halftime Cathedral" ? 0.35f : 0.0f));
     }
 }

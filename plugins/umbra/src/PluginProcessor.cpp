@@ -3,11 +3,11 @@
 
 using APVTS = juce::AudioProcessorValueTreeState;
 
-static const char* kIds[22] = {
+static const char* kIds[23] = {
     ParamIDs::preDelay, ParamIDs::size, ParamIDs::decay, ParamIDs::dark, ParamIDs::density, ParamIDs::motion,
     ParamIDs::gravity, ParamIDs::early, ParamIDs::duck, ParamIDs::width, ParamIDs::mix, ParamIDs::output, ParamIDs::freeze,
     ParamIDs::power, ParamIDs::motionSync, ParamIDs::motionDiv, ParamIDs::motionRate,
-    ParamIDs::lowCut, ParamIDs::highCut, ParamIDs::lowSlope, ParamIDs::highSlope, ParamIDs::tilt
+    ParamIDs::lowCut, ParamIDs::highCut, ParamIDs::lowSlope, ParamIDs::highSlope, ParamIDs::tilt, ParamIDs::bloom
 };
 
 UmbraAudioProcessor::UmbraAudioProcessor()
@@ -16,7 +16,7 @@ UmbraAudioProcessor::UmbraAudioProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMS", createLayout())
 {
-    for (int i = 0; i < 22; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
+    for (int i = 0; i < 23; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
 }
 
 APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
@@ -67,6 +67,7 @@ APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
     params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{ ParamIDs::highSlope, 1 }, "High Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::tilt, 1 }, "Tilt", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
+    params.push_back(pct(ParamIDs::bloom, "Bloom", 0.0f));
     return { params.begin(), params.end() };
 }
 
@@ -100,6 +101,7 @@ void UmbraAudioProcessor::updateEngineParams()
                      : p[16]->load();
     u.lowCutHz = p[17]->load(); u.highCutHz = p[18]->load();
     u.lowSlope = int(p[19]->load()); u.highSlope = int(p[20]->load()); u.tilt = p[21]->load();
+    u.bloom = p[22]->load();
     engine.setParams(u);
 }
 

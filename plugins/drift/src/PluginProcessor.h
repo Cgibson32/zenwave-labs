@@ -30,6 +30,7 @@ namespace ParamIDs
     inline constexpr auto lowSlope   = "lowslope";
     inline constexpr auto highSlope  = "highslope";
     inline constexpr auto tilt       = "tilt";
+    inline constexpr auto color      = "color";
 }
 
 class DriftAudioProcessor : public juce::AudioProcessor
@@ -82,7 +83,7 @@ private:
     std::atomic<float>* pTime{}, * pSync{}, * pDivision{}, * pFeedback{}, * pWow{}, * pAge{}, * pSpace{},
                       * pSize{}, * pDecay{}, * pWidth{}, * pSpread{}, * pPingPong{}, * pFreeze{}, * pMix{}, * pOutput{},
                       * pPower{}, * pWobbleSync{}, * pWobbleDiv{}, * pWobbleRate{},
-                      * pLowCut{}, * pHighCut{}, * pLowSlope{}, * pHighSlope{}, * pTilt{};
+                      * pLowCut{}, * pHighCut{}, * pLowSlope{}, * pHighSlope{}, * pTilt{}, * pColor{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DriftAudioProcessor)
 };

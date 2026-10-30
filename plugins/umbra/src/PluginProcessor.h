@@ -28,6 +28,7 @@ namespace ParamIDs
     inline constexpr auto lowSlope   = "lowslope";
     inline constexpr auto highSlope  = "highslope";
     inline constexpr auto tilt       = "tilt";
+    inline constexpr auto bloom      = "bloom";
 }
 
 class UmbraAudioProcessor : public juce::AudioProcessor
@@ -74,7 +75,7 @@ private:
     zwui::Meter meterIn, meterOut;
     int currentPreset = 0;
     double hostBpm = 120.0;
-    std::atomic<float>* p[22] {};
+    std::atomic<float>* p[23] {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UmbraAudioProcessor)
 };

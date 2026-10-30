@@ -22,7 +22,7 @@ private:
     zwui::Stage stage;
 
     zwui::Knob preDelay, size, decay, dark, mix;            // macro row
-    zwui::Knob density, motion, gravity, early, duck, width, output, motionRate;  // deep row
+    zwui::Knob density, motion, gravity, early, duck, width, output, motionRate, bloom;  // deep row
     zwui::Knob lowCut, highCut, tilt;
     juce::ComboBox lowSlopeBox, highSlopeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;

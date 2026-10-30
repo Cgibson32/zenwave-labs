@@ -21,9 +21,26 @@ jobs:
           g++ -std=c++20 -O2 -Wall -Wextra -Ilibs/zenwave_dsp/include tests/dsp_tests.cpp -o dsp_tests
           ./dsp_tests
 
+  plugin-qa:
+    name: Plugin QA sweep (Linux, headless)
+    runs-on: ubuntu-latest
+    needs: dsp-tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install JUCE Linux deps
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libfreetype6-dev libfontconfig1-dev libgl1-mesa-dev libcurl4-openssl-dev xvfb
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DZENWAVE_BUILD_TESTS=OFF -DZENWAVE_BUILD_QA=ON
+      - name: Build QA tools
+        run: cmake --build build --config Release --target DriftQA UmbraQA --parallel 4
+      - name: Run QA (every preset, every parameter, bypass, state)
+        run: |
+          xvfb-run -a build/tools/qa/DriftQA_artefacts/Release/DriftQA
+          xvfb-run -a build/tools/qa/UmbraQA_artefacts/Release/UmbraQA
+
   build:
     name: ${{ matrix.name }}
-    needs: dsp-tests
+    needs: [dsp-tests, plugin-qa]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

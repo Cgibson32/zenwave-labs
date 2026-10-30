@@ -34,6 +34,7 @@ DriftAudioProcessor::DriftAudioProcessor()
     pLowSlope = apvts.getRawParameterValue(ParamIDs::lowSlope);
     pHighSlope = apvts.getRawParameterValue(ParamIDs::highSlope);
     pTilt = apvts.getRawParameterValue(ParamIDs::tilt);
+    pColor = apvts.getRawParameterValue(ParamIDs::color);
 }
 
 APVTS::ParameterLayout DriftAudioProcessor::createLayout()
@@ -96,6 +97,8 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
     params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::highSlope, 1 }, "High Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::tilt, 1 }, "Tilt", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::color, 1 }, "Color", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return v < -0.01f ? "Dark " + juce::String(juce::roundToInt(-v * 100)) + " %" : v > 0.01f ? "Thin " + juce::String(juce::roundToInt(v * 100)) + " %" : juce::String("Off"); })));
     return { params.begin(), params.end() };
 }
 
@@ -144,6 +147,7 @@ void DriftAudioProcessor::updateEngineParams()
     p.lowCutHz  = pLowCut->load();  p.highCutHz = pHighCut->load();
     p.lowSlope  = int(pLowSlope->load()); p.highSlope = int(pHighSlope->load());
     p.tilt      = pTilt->load();
+    p.color     = pColor->load();
     engine.setParams(p);
 }
 

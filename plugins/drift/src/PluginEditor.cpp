@@ -18,6 +18,7 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     spread.init    (*this, processor.apvts, ParamIDs::spread,     "SPREAD", false);
     wobbleRate.init(*this, processor.apvts, ParamIDs::wobbleRate, "WOBBLE RATE", false);
     output.init    (*this, processor.apvts, ParamIDs::output,     "OUTPUT", false);
+    color.init     (*this, processor.apvts, ParamIDs::color,      "COLOR",  false);
     lowCut.init    (*this, processor.apvts, ParamIDs::lowCut,     "LOW CUT",  false);
     highCut.init   (*this, processor.apvts, ParamIDs::highCut,    "HIGH CUT", false);
     tilt.init      (*this, processor.apvts, ParamIDs::tilt,       "TILT",     false);
@@ -90,7 +91,7 @@ void DriftAudioProcessorEditor::timerCallback()
     wobbleDivBox.setEnabled(wsync); wobbleDivBox.setAlpha(wsync ? 1.0f : 0.4f);
     wobbleRate.slider.setAlpha(wsync ? 0.35f : 1.0f);
     const bool on = powerButton.getToggleState();
-    for (auto* k : { &time, &feedback, &wobble, &age, &space, &mix, &size, &decay, &width, &spread, &output, &wobbleRate })
+    for (auto* k : { &time, &feedback, &wobble, &age, &space, &mix, &size, &decay, &width, &spread, &output, &wobbleRate, &color })
         k->slider.setAlpha(on ? k->slider.getAlpha() : 0.3f);
 
     repaint();
@@ -109,7 +110,7 @@ void DriftAudioProcessorEditor::paint(juce::Graphics& g)
     zwui::EqCurve eq { lowCut.slider.getValue() > 0 ? float(lowCut.slider.getValue()) : 20.0f, float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
     zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
-    zwui::drawOrbit(g, { 470 * s, 44 * s }, 26 * s, processor.motion, lnf.accent, lnf.accent2);
+    zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
 void DriftAudioProcessorEditor::resized()
@@ -117,9 +118,9 @@ void DriftAudioProcessorEditor::resized()
     const float s = float(getWidth()) / 880.0f;
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
-    powerButton.setBounds(S(400), S(22), S(34), S(34));
-    presetBox.setBounds(S(520), S(24), S(250), S(30));
-    freezeButton.setBounds(S(780), S(24), S(78), S(30));
+    presetBox.setBounds(S(452), S(22), S(236), S(30));
+    freezeButton.setBounds(S(696), S(22), S(78), S(30));
+    powerButton.setBounds(S(812), S(20), S(34), S(34));
 
     zwui::Knob* bigs[] = { &time, &feedback, &wobble, &age, &space, &mix };
     int x = S(44);
@@ -132,9 +133,9 @@ void DriftAudioProcessorEditor::resized()
     wobbleSyncButton.setBounds(S(330), S(300), S(58), S(26));
     wobbleDivBox.setBounds(S(394), S(300), S(84), S(26));
 
-    zwui::Knob* smalls[] = { &size, &decay, &width, &spread, &wobbleRate, &output };
-    x = S(50);
-    for (auto* k : smalls) { k->layout(x, S(392), S(104), S(110), S(14)); x += S(132); }
+    zwui::Knob* smalls[] = { &color, &size, &decay, &width, &spread, &wobbleRate, &output };
+    x = S(40);
+    for (auto* k : smalls) { k->layout(x, S(392), S(100), S(110), S(14)); x += S(115); }
 
     // Tone: field display on the left, cuts + tilt on the right
     zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };

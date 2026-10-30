@@ -19,6 +19,7 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
     width.init   (*this, processor.apvts, ParamIDs::width,    "WIDTH",     false);
     output.init  (*this, processor.apvts, ParamIDs::output,   "OUTPUT",    false);
     motionRate.init(*this, processor.apvts, ParamIDs::motionRate, "MOTION RATE", false);
+    bloom.init     (*this, processor.apvts, ParamIDs::bloom,      "BLOOM",       false);
     lowCut.init (*this, processor.apvts, ParamIDs::lowCut,  "LOW CUT",  false);
     highCut.init(*this, processor.apvts, ParamIDs::highCut, "HIGH CUT", false);
     tilt.init   (*this, processor.apvts, ParamIDs::tilt,    "TILT",     false);
@@ -85,7 +86,7 @@ void UmbraAudioProcessorEditor::timerCallback()
     motionDivBox.setEnabled(msync); motionDivBox.setAlpha(msync ? 1.0f : 0.4f);
     motionRate.slider.setAlpha(msync ? 0.35f : 1.0f);
     const bool on = powerButton.getToggleState();
-    for (auto* k : { &preDelay, &size, &decay, &dark, &mix, &density, &motion, &gravity, &early, &duck, &width, &output, &motionRate })
+    for (auto* k : { &preDelay, &size, &decay, &dark, &mix, &density, &motion, &gravity, &early, &duck, &width, &output, &motionRate, &bloom })
         k->slider.setAlpha(on ? k->slider.getAlpha() : 0.3f);
     repaint();
 }
@@ -103,7 +104,7 @@ void UmbraAudioProcessorEditor::paint(juce::Graphics& g)
     zwui::EqCurve eq { float(lowCut.slider.getValue()), float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
     zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
-    zwui::drawOrbit(g, { 470 * s, 44 * s }, 26 * s, processor.motion, lnf.accent, lnf.accent2);
+    zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
 void UmbraAudioProcessorEditor::resized()
@@ -111,9 +112,9 @@ void UmbraAudioProcessorEditor::resized()
     const float s = float(getWidth()) / 880.0f;
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
-    powerButton.setBounds(S(400), S(22), S(34), S(34));
-    presetBox.setBounds(S(520), S(24), S(250), S(30));
-    freezeButton.setBounds(S(780), S(24), S(78), S(30));
+    presetBox.setBounds(S(452), S(22), S(236), S(30));
+    freezeButton.setBounds(S(696), S(22), S(78), S(30));
+    powerButton.setBounds(S(812), S(20), S(34), S(34));
 
     zwui::Knob* bigs[] = { &preDelay, &size, &decay, &dark, &mix };
     int x = S(66);
@@ -122,9 +123,9 @@ void UmbraAudioProcessorEditor::resized()
     motionSyncButton.setBounds(S(52), S(300), S(58), S(26));
     motionDivBox.setBounds(S(116), S(300), S(84), S(26));
 
-    zwui::Knob* smalls[] = { &density, &motion, &motionRate, &gravity, &early, &duck, &width, &output };
-    x = S(34);
-    for (auto* k : smalls) { k->layout(x, S(392), S(96), S(110), S(14)); x += S(103); }
+    zwui::Knob* smalls[] = { &bloom, &density, &motion, &motionRate, &gravity, &early, &duck, &width, &output };
+    x = S(32);
+    for (auto* k : smalls) { k->layout(x, S(392), S(88), S(110), S(14)); x += S(92); }
 
     zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };
     x = S(566);

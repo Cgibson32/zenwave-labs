@@ -27,6 +27,16 @@ inline float fastTanh(float x) noexcept
     return clampf(a / b, -1.0f, 1.0f);
 }
 
+// Transparent soft ceiling: unity below ~0.7, smooth knee, never exceeds 1.0.
+inline float softCeiling(float x) noexcept
+{
+    const float a = std::fabs(x);
+    if (a <= 0.7f) return x;
+    const float over = a - 0.7f;
+    const float y = 0.7f + 0.3f * fastTanh(over / 0.3f);
+    return x < 0.0f ? -y : y;
+}
+
 inline bool isDenormal(float v) noexcept { return std::fabs(v) < 1.0e-25f; }
 inline float undenormal(float v) noexcept { return isDenormal(v) ? 0.0f : v; }
 

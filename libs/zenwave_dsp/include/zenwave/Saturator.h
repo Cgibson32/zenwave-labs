@@ -16,12 +16,14 @@ public:
     void setSampleRate(double sr) noexcept
     {
         dc.setSampleRate(sr);
-        preEmphasis.setSampleRate(sr);
-        preEmphasis.setHighpass(1200.0f);
+        preEmphasis.setSampleRate(sr);  preEmphasis.setHighpass(1800.0f);
+        deEmphasis.setSampleRate(sr);   deEmphasis.setLowpass(1800.0f);
+        headBump.setSampleRate(sr);     headBump.setMode(SVF::Mode::Bandpass); headBump.setCutoff(95.0f); headBump.setResonance(0.9f);
         reset();
     }
 
-    void reset() noexcept { dc.reset(); preEmphasis.reset(); os2.reset(); os4.reset(); }
+    void reset() noexcept { dc.reset(); preEmphasis.reset(); deEmphasis.reset(); headBump.reset(); os2.reset(); os4.reset(); }
+    void setHeadBump(float amt) noexcept { bump = clampf(amt, 0.0f, 1.0f); }
     // factor: 1, 2 or 4
     void setOversampling(int factor) noexcept { osFactor = factor >= 4 ? 4 : (factor >= 2 ? 2 : 1); }
 
@@ -30,8 +32,9 @@ public:
     {
         drive = clampf(d, 0.0f, 1.0f);
         gain  = dbToGain(drive * 24.0f);
-        // Keep perceived level roughly constant as drive increases
-        makeup = 1.0f / std::max(0.35f, fastTanh(gain * 0.6f));
+        // Gain law: near-unity for small signals (so a feedback loop's gain stays honest),
+        // gentle level compensation for loud ones. out ≈ tanh(g·x) / g^0.85
+        makeup = 1.0f / std::pow(std::max(1.0f, gain), 0.85f);
     }
     void setBias(float b) noexcept { bias = clampf(b, -1.0f, 1.0f) * 0.25f; }
     void setCharacter(Character c) noexcept { character = c; }
@@ -39,9 +42,10 @@ public:
 
     float process(float x) noexcept
     {
-        // Tape pre-emphasis: a little HF lift before the curve, undone after
-        const float hf = preEmphasis.process(x);
-        const float pre = (x + hf * emphasis * 0.5f) * gain + bias;
+        // Tape: pre-emphasis (HF lift into the curve) → nonlinearity → matching de-emphasis.
+        // Louder = more HF compression, exactly how tape behaves. Head bump adds low-mid weight.
+        const float hf  = preEmphasis.process(x);
+        const float pre = (x + hf * emphasis) * gain + bias;
 
         float v;
         if (osFactor == 4)
@@ -57,7 +61,10 @@ public:
         }
         else v = curve(pre);
 
-        v -= hf * emphasis * 0.5f * std::min(gain, 1.0f);  // de-emphasis (approx.)
+        // De-emphasis: blend toward the lowpassed version by the same amount we lifted
+        const float lp = deEmphasis.process(v);
+        v = lerp(v, lp, emphasis / (1.0f + emphasis));
+        v += headBump.process(v) * bump * 0.35f;
         v  = dc.process(v);
         return v * makeup;
     }
@@ -88,8 +95,10 @@ private:
     float drive = 0.0f, gain = 1.0f, makeup = 1.0f, bias = 0.0f, emphasis = 0.3f;
     Character character = Character::Tape;
     int osFactor = 4;
+    float bump = 0.0f;
     DCBlocker dc;
-    OnePole   preEmphasis;
+    OnePole   preEmphasis, deEmphasis;
+    SVF       headBump;
     Oversampler2x os2;
     Oversampler4x os4;
 };

@@ -15,12 +15,12 @@ namespace zwui {
 
 struct Palette
 {
-    static inline const juce::Colour bg        { 0xff04040a };
-    static inline const juce::Colour bg2       { 0xff0b0a18 };
-    static inline const juce::Colour card      { 0xff0e0d1c };
-    static inline const juce::Colour cardEdge  { 0xff26233f };
-    static inline const juce::Colour knobDark  { 0xff07070f };
-    static inline const juce::Colour knobLight { 0xff242246 };
+    static inline const juce::Colour bg        { 0xff000000 };
+    static inline const juce::Colour bg2       { 0xff050508 };
+    static inline const juce::Colour card      { 0xff08080d };
+    static inline const juce::Colour cardEdge  { 0xff1e1c2e };
+    static inline const juce::Colour knobDark  { 0xff020204 };
+    static inline const juce::Colour knobLight { 0xff1a1a24 };
     static inline const juce::Colour text      { 0xfff4f2ff };
     static inline const juce::Colour dim       { 0xff8784a6 };
     static inline const juce::Colour violet    { 0xff8b5cf6 };
@@ -100,7 +100,7 @@ public:
         const float radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
         const auto c = bounds.getCentre();
         const float angle = startAngle + pos * (endAngle - startAngle);
-        const float arcW  = juce::jmax(3.0f, radius * 0.095f);
+        const float arcW  = juce::jmax(3.0f, radius * 0.085f);
         const float arcR  = radius - arcW;
         const bool  hot   = s.isMouseOverOrDragging();
         const bool  bipolar = s.getMinimum() < 0.0 && s.getMaximum() > 0.0;
@@ -110,36 +110,44 @@ public:
         const float glow = (0.25f + amount * 1.3f + (hot ? 0.5f : 0.0f)) * breathe;
         const auto col = aurora(amount, accent, accent2);
 
-        // Halo (value-scaled, breathing)
+        // Halo
         if (amount > 0.02f)
         {
-            const float hr = radius * (1.3f + 0.12f * pulse * amount);
-            g.setGradientFill(juce::ColourGradient(col.withAlpha((0.20f * amount + (hot ? 0.1f : 0.0f)) * breathe), c.x, c.y,
+            const float hr = radius * (1.35f + 0.12f * pulse * amount);
+            g.setGradientFill(juce::ColourGradient(col.withAlpha((0.22f * amount + (hot ? 0.1f : 0.0f)) * breathe), c.x, c.y,
                                                    juce::Colours::transparentBlack, c.x + hr, c.y, true));
             g.fillEllipse(c.x - hr, c.y - hr, hr * 2.0f, hr * 2.0f);
         }
-
-        // Drop shadow under the whole knob (depth)
-        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.55f), c.x, c.y + radius * 0.25f,
+        // Drop shadow
+        g.setGradientFill(juce::ColourGradient(juce::Colours::black.withAlpha(0.6f), c.x, c.y + radius * 0.25f,
                                                juce::Colours::transparentBlack, c.x, c.y + radius * 1.25f, true));
         g.fillEllipse(c.x - radius * 1.1f, c.y - radius * 0.9f, radius * 2.2f, radius * 2.2f);
 
-        // Bevelled outer ring (track groove)
+        // LED tick ring: 31 ticks, lit up to the value in the aurora gradient
+        {
+            const int ticks = 31;
+            const float tickR0 = radius + 1.0f, tickR1 = radius + 5.0f;
+            for (int i = 0; i < ticks; ++i)
+            {
+                const float t = float(i) / (ticks - 1);
+                const float a = startAngle + (endAngle - startAngle) * t;
+                const bool lit = bipolar ? (pos >= 0.5f ? (t >= 0.5f && t <= pos) : (t <= 0.5f && t >= pos)) : (t <= pos + 0.001f);
+                const auto p1 = c.getPointOnCircumference(tickR0, a), p2 = c.getPointOnCircumference(tickR1 + (i % 5 == 0 ? 2.0f : 0.0f), a);
+                if (lit) { g.setColour(aurora(t * amount, accent, accent2).withAlpha(0.35f)); g.drawLine({ p1, p2 }, 3.0f); }
+                g.setColour(lit ? aurora(t, accent, accent2).brighter(0.2f) : Palette::dim.withAlpha(0.25f));
+                g.drawLine({ p1, p2 }, lit ? 1.6f : 1.0f);
+            }
+        }
+
+        // Track groove
         juce::Path track;
         track.addCentredArc(c.x, c.y, arcR, arcR, 0.0f, startAngle, endAngle, true);
-        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.setColour(juce::Colours::black.withAlpha(0.65f));
         g.strokePath(track, juce::PathStrokeType(arcW + 2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setColour(Palette::cardEdge);
         g.strokePath(track, juce::PathStrokeType(arcW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setColour(Palette::dim.withAlpha(0.35f));
-        for (int i = 0; i <= 10; ++i)
-        {
-            const float a = startAngle + (endAngle - startAngle) * i / 10.0f;
-            const auto p1 = c.getPointOnCircumference(radius + 2.0f, a), p2 = c.getPointOnCircumference(radius + (i % 5 == 0 ? 6.0f : 4.0f), a);
-            g.drawLine({ p1, p2 }, 1.0f);
-        }
 
-        // Value arc: aurora segments with glow
+        // Value arc
         if (std::abs(angle - from) > 0.002f)
         {
             const float a0 = juce::jmin(from, angle), a1 = juce::jmax(from, angle);
@@ -162,36 +170,57 @@ public:
             g.fillEllipse(tip.x - arcW * 0.55f, tip.y - arcW * 0.55f, arcW * 1.1f, arcW * 1.1f);
         }
 
-        // 3D body: dark base, lit top-left, specular highlight, bevel ring
-        const float bodyR = arcR - arcW * 1.9f;
-        g.setGradientFill(juce::ColourGradient(Palette::knobLight, c.x - bodyR * 0.5f, c.y - bodyR * 0.7f,
-                                               Palette::knobDark, c.x + bodyR * 0.55f, c.y + bodyR * 0.9f, true));
-        g.fillEllipse(c.x - bodyR, c.y - bodyR, bodyR * 2.0f, bodyR * 2.0f);
-        // bevel: light rim top, dark rim bottom
-        g.setGradientFill(juce::ColourGradient(juce::Colours::white.withAlpha(0.22f), c.x, c.y - bodyR,
-                                               juce::Colours::black.withAlpha(0.5f), c.x, c.y + bodyR, false));
-        g.drawEllipse(c.x - bodyR, c.y - bodyR, bodyR * 2.0f, bodyR * 2.0f, 1.6f);
-        // specular
-        g.setGradientFill(juce::ColourGradient(juce::Colours::white.withAlpha(0.16f), c.x - bodyR * 0.35f, c.y - bodyR * 0.45f,
-                                               juce::Colours::transparentBlack, c.x - bodyR * 0.35f + bodyR * 0.9f, c.y - bodyR * 0.45f + bodyR * 0.9f, true));
-        g.fillEllipse(c.x - bodyR, c.y - bodyR, bodyR * 2.0f, bodyR * 2.0f);
-        // inner accent ring + core light, value-driven
-        g.setColour(col.withAlpha(0.15f + amount * 0.5f));
-        g.drawEllipse(c.x - bodyR * 0.70f, c.y - bodyR * 0.70f, bodyR * 1.40f, bodyR * 1.40f, 1.2f);
-        g.setGradientFill(juce::ColourGradient(col.withAlpha((0.10f + amount * 0.40f) * breathe), c.x, c.y,
-                                               juce::Colours::transparentBlack, c.x + bodyR * 0.7f, c.y, true));
-        g.fillEllipse(c.x - bodyR * 0.7f, c.y - bodyR * 0.7f, bodyR * 1.4f, bodyR * 1.4f);
+        // Cap: glossy obsidian with a violet rim light and a specular streak
+        const float capR = arcR - arcW * 1.9f;
+        // base: near-black radial with a lit upper-left
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1c1b26), c.x - capR * 0.45f, c.y - capR * 0.6f,
+                                               juce::Colour(0xff030306), c.x + capR * 0.4f, c.y + capR * 0.7f, true));
+        g.fillEllipse(c.x - capR, c.y - capR, capR * 2.0f, capR * 2.0f);
+        // outer bevel: violet rim light at top, deep shadow at bottom
+        g.setGradientFill(juce::ColourGradient(accentHi.withAlpha(0.55f), c.x, c.y - capR,
+                                               juce::Colours::black.withAlpha(0.8f), c.x, c.y + capR, false));
+        g.drawEllipse(c.x - capR + 0.75f, c.y - capR + 0.75f, capR * 2.0f - 1.5f, capR * 2.0f - 1.5f, 1.5f);
+        // knurl band (fine, low contrast)
+        for (int i = 0; i < 60; ++i)
+        {
+            const float a = juce::MathConstants<float>::twoPi * i / 60.0f;
+            const auto p1 = c.getPointOnCircumference(capR * 0.84f, a), p2 = c.getPointOnCircumference(capR * 0.95f, a);
+            g.setColour(juce::Colours::white.withAlpha(i % 2 ? 0.035f : 0.08f));
+            g.drawLine({ p1, p2 }, 1.0f);
+        }
+        // dome: glossy black
+        const float domeR = capR * 0.76f;
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff15141e), c.x - domeR * 0.3f, c.y - domeR * 0.5f,
+                                               juce::Colour(0xff050508), c.x + domeR * 0.5f, c.y + domeR * 0.9f, true));
+        g.fillEllipse(c.x - domeR, c.y - domeR, domeR * 2.0f, domeR * 2.0f);
+        g.setGradientFill(juce::ColourGradient(accent.withAlpha(0.45f), c.x, c.y - domeR, juce::Colours::transparentBlack, c.x, c.y + domeR * 0.2f, false));
+        g.drawEllipse(c.x - domeR, c.y - domeR, domeR * 2.0f, domeR * 2.0f, 1.0f);
+        // specular streak (curved highlight, upper-left)
+        {
+            juce::Path streak;
+            streak.addCentredArc(c.x, c.y, domeR * 0.78f, domeR * 0.78f, 0.0f, -2.35f, -1.05f, true);
+            g.setColour(juce::Colours::white.withAlpha(0.22f));
+            g.strokePath(streak, juce::PathStrokeType(domeR * 0.10f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour(juce::Colours::white.withAlpha(0.10f));
+            g.strokePath(streak, juce::PathStrokeType(domeR * 0.22f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+        // violet reactor core, value-driven
+        g.setGradientFill(juce::ColourGradient(col.withAlpha((0.12f + amount * 0.55f) * breathe), c.x, c.y + domeR * 0.15f,
+                                               juce::Colours::transparentBlack, c.x + domeR * 0.72f, c.y, true));
+        g.fillEllipse(c.x - domeR, c.y - domeR, domeR * 2.0f, domeR * 2.0f);
+        g.setColour(col.withAlpha(0.25f + amount * 0.55f));
+        g.drawEllipse(c.x - domeR * 0.5f, c.y - domeR * 0.5f, domeR, domeR, 1.0f);
 
-        // Pointer with glow
+        // Pointer
         juce::Path ptr;
-        ptr.addRoundedRectangle(-arcW * 0.42f, -bodyR + 5.0f, arcW * 0.84f, bodyR * 0.52f, arcW * 0.42f);
+        ptr.addRoundedRectangle(-arcW * 0.4f, -capR + 4.0f, arcW * 0.8f, capR * 0.55f, arcW * 0.4f);
         ptr.applyTransform(juce::AffineTransform::rotation(angle).translated(c));
         for (int i = 3; i >= 1; --i)
         {
             g.setColour(col.withAlpha(0.10f + amount * 0.08f));
             g.strokePath(ptr, juce::PathStrokeType(i * 2.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
-        g.setColour(juce::Colours::white.interpolatedWith(accentHi, 0.3f));
+        g.setColour(juce::Colours::white.interpolatedWith(accentHi, 0.25f));
         g.fillPath(ptr);
     }
 
@@ -199,30 +228,29 @@ public:
     {
         auto r = b.getLocalBounds().toFloat().reduced(1.0f);
         const bool on = b.getToggleState();
-        const bool round = b.getProperties()["round"];
-        const float rad = round ? r.getHeight() * 0.5f : 8.0f;
-        if (round) r = r.withSizeKeepingCentre(r.getHeight(), r.getHeight());
-        // depth
+        const bool round = bool(b.getProperties()["round"]);
+        if (round) r = r.withSizeKeepingCentre(juce::jmin(r.getWidth(), r.getHeight()), juce::jmin(r.getWidth(), r.getHeight()));
+        auto shape = [&](juce::Rectangle<float> q) { juce::Path p; if (round) p.addEllipse(q); else p.addRoundedRectangle(q, 8.0f); return p; };
+
         g.setColour(juce::Colours::black.withAlpha(0.45f));
-        g.fillRoundedRectangle(r.translated(0, 2.0f), rad);
+        g.fillPath(shape(r.translated(0, 2.0f)));
         if (on)
         {
-            for (int i = 4; i >= 1; --i) { auto e = r.expanded(i * 2.2f); g.setColour(accent2.withAlpha(0.07f * (1.0f + pulse * 0.5f))); g.fillRoundedRectangle(e, round ? e.getHeight() * 0.5f : rad + i * 2.0f); }
+            for (int i = 5; i >= 1; --i) { g.setColour(accent2.withAlpha(0.06f * (1.0f + pulse * 0.6f))); g.fillPath(shape(r.expanded(i * 2.4f))); }
             g.setGradientFill(juce::ColourGradient(accent, r.getX(), r.getY(), accent2.darker(0.2f), r.getRight(), r.getBottom(), false));
-            g.fillRoundedRectangle(r, rad);
-            g.setColour(juce::Colours::white.withAlpha(0.7f)); g.drawRoundedRectangle(r, rad, 1.0f);
+            g.fillPath(shape(r));
+            g.setColour(juce::Colours::white.withAlpha(0.75f)); g.strokePath(shape(r), juce::PathStrokeType(1.0f));
             g.setColour(juce::Colours::white);
         }
         else
         {
             g.setGradientFill(juce::ColourGradient(Palette::knobLight, r.getX(), r.getY(), Palette::card, r.getX(), r.getBottom(), false));
-            g.fillRoundedRectangle(r, rad);
-            g.setColour(hover ? accent.withAlpha(0.8f) : Palette::cardEdge); g.drawRoundedRectangle(r, rad, 1.0f);
+            g.fillPath(shape(r));
+            g.setColour(hover ? accent.withAlpha(0.8f) : Palette::cardEdge); g.strokePath(shape(r), juce::PathStrokeType(1.0f));
             g.setColour(hover ? Palette::text : Palette::dim);
         }
         if (round)
         {
-            // power glyph
             juce::Path p; const auto c = r.getCentre(); const float pr = r.getHeight() * 0.26f;
             p.addCentredArc(c.x, c.y, pr, pr, 0.0f, 0.6f, juce::MathConstants<float>::twoPi - 0.6f, true);
             g.strokePath(p, juce::PathStrokeType(2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
@@ -307,11 +335,11 @@ inline void drawBackgroundStatic(juce::Graphics& g, juce::Rectangle<float> b, ju
 {
     g.setGradientFill(juce::ColourGradient(Palette::bg2, b.getCentreX(), b.getY(), Palette::bg, b.getCentreX(), b.getBottom(), false));
     g.fillRect(b);
-    g.setGradientFill(juce::ColourGradient(accent.withAlpha(0.26f), b.getWidth() * 0.82f, b.getHeight() * 0.9f, juce::Colours::transparentBlack, b.getWidth() * 0.35f, b.getHeight() * 0.3f, true));
+    g.setGradientFill(juce::ColourGradient(accent.withAlpha(0.14f), b.getWidth() * 0.85f, b.getHeight() * 0.95f, juce::Colours::transparentBlack, b.getWidth() * 0.45f, b.getHeight() * 0.45f, true));
     g.fillRect(b);
-    g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.14f), b.getWidth() * 0.12f, b.getHeight() * 0.18f, juce::Colours::transparentBlack, b.getWidth() * 0.55f, b.getHeight() * 0.6f, true));
+    g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.07f), b.getWidth() * 0.1f, b.getHeight() * 0.15f, juce::Colours::transparentBlack, b.getWidth() * 0.45f, b.getHeight() * 0.5f, true));
     g.fillRect(b);
-    g.setGradientFill(juce::ColourGradient(Palette::magenta.withAlpha(0.07f), b.getWidth() * 0.5f, b.getHeight() * 1.05f, juce::Colours::transparentBlack, b.getWidth() * 0.5f, b.getHeight() * 0.55f, true));
+    g.setGradientFill(juce::ColourGradient(Palette::magenta.withAlpha(0.04f), b.getWidth() * 0.5f, b.getHeight() * 1.05f, juce::Colours::transparentBlack, b.getWidth() * 0.5f, b.getHeight() * 0.6f, true));
     g.fillRect(b);
 
     // Geometry rings
@@ -336,7 +364,7 @@ inline void drawBackgroundAnimated(juce::Graphics& g, juce::Rectangle<float> b, 
     const float t = m.time;
     // Drifting veil
     const float vx = b.getWidth() * (0.5f + 0.25f * std::sin(t * 0.07f)), vy = b.getHeight() * (0.5f + 0.2f * std::cos(t * 0.05f));
-    g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.07f), vx, vy, juce::Colours::transparentBlack, vx + b.getWidth() * 0.45f, vy, true));
+    g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.04f), vx, vy, juce::Colours::transparentBlack, vx + b.getWidth() * 0.45f, vy, true));
     g.fillRect(b);
 
     // Planet horizon with beat pulse
@@ -411,7 +439,7 @@ inline void drawCard(juce::Graphics& g, juce::Rectangle<float> r, const juce::St
     // drop shadow
     g.setColour(juce::Colours::black.withAlpha(0.45f));
     g.fillRoundedRectangle(r.translated(0, 4.0f * s), 16.0f * s);
-    g.setColour(Palette::card.withAlpha(0.74f));
+    g.setColour(Palette::card.withAlpha(0.66f));
     g.fillRoundedRectangle(r, 16.0f * s);
     // top sheen
     g.setGradientFill(juce::ColourGradient(juce::Colours::white.withAlpha(0.06f), r.getX(), r.getY(), juce::Colours::transparentBlack, r.getX(), r.getY() + r.getHeight() * 0.35f, false));
@@ -432,17 +460,36 @@ inline void drawCard(juce::Graphics& g, juce::Rectangle<float> r, const juce::St
 inline void drawHeader(juce::Graphics& g, juce::Rectangle<float> r, float s, const juce::String& title,
                        const juce::String& subtitle, juce::Colour accent, juce::Colour accentHi, juce::Colour accent2)
 {
-    const auto tr = juce::Rectangle<float>(26 * s, 12 * s, 360 * s, 40 * s);
-    g.setFont(juce::Font(juce::FontOptions(32.0f * s, juce::Font::bold)));
-    for (int i = 3; i >= 1; --i) { g.setColour(accent.withAlpha(0.10f)); g.drawText(title, tr.expanded(i * 1.0f), juce::Justification::centredLeft); }
-    g.setGradientFill(juce::ColourGradient(Palette::text, tr.getX(), tr.getY(), accentHi, tr.getX() + 180 * s, tr.getBottom(), false));
+    // Wordmark: wide-tracked, gradient fill, thin outer glow, hairline underline that fades
+    const juce::String spaced = [&] { juce::String o; for (auto ch : title) { o << ch << " "; } return o.trimEnd(); }();
+    const auto tr = juce::Rectangle<float>(26 * s, 14 * s, 420 * s, 42 * s);
+    juce::Font f(juce::FontOptions(34.0f * s, juce::Font::bold));
+    f.setExtraKerningFactor(0.08f);
+    g.setFont(f);
+    for (int i = 4; i >= 1; --i) { g.setColour(accent.withAlpha(0.07f)); g.drawText(title, tr.expanded(i * 1.2f, 0), juce::Justification::centredLeft); }
+    g.setGradientFill(juce::ColourGradient(Palette::text, tr.getX(), tr.getY(), accentHi, tr.getX() + 200 * s, tr.getBottom(), false));
     g.drawText(title, tr, juce::Justification::centredLeft);
-    juce::Path ul; ul.startNewSubPath(26 * s, 56 * s); ul.lineTo(26 * s + 64 * s, 56 * s);
-    glowStroke(g, ul, accent2, 2.0f * s, 1.2f);
+
+    // Measured underline under the word
+    const float tw = juce::jmin(260.0f * s, juce::GlyphArrangement::getStringWidth(f, title) * 1.08f);
+    juce::Path ul; ul.startNewSubPath(26 * s, 58 * s); ul.lineTo(26 * s + tw, 58 * s);
+    g.setGradientFill(juce::ColourGradient(accent2, 26 * s, 58 * s, juce::Colours::transparentBlack, 26 * s + tw, 58 * s, false));
+    g.strokePath(ul, juce::PathStrokeType(1.5f * s));
+    juce::Path ulGlow; ulGlow.startNewSubPath(26 * s, 58 * s); ulGlow.lineTo(26 * s + tw * 0.45f, 58 * s);
+    glowStroke(g, ulGlow, accent2, 1.5f * s, 1.3f);
+
+    // Subtitle chip
+    g.setFont(juce::Font(juce::FontOptions(9.5f * s, juce::Font::bold)));
+    const float cw = juce::GlyphArrangement::getStringWidth(g.getCurrentFont(), subtitle) + 18 * s;
+    const auto chip = juce::Rectangle<float>(26 * s, 64 * s, cw, 15 * s);
+    g.setColour(accent.withAlpha(0.16f)); g.fillRoundedRectangle(chip, 7.5f * s);
+    g.setColour(accent.withAlpha(0.6f));  g.drawRoundedRectangle(chip, 7.5f * s, 0.8f);
+    g.setColour(accentHi); g.drawText(subtitle, chip, juce::Justification::centred);
+
+    // Wordmark right
     g.setColour(Palette::dim);
-    g.setFont(juce::Font(juce::FontOptions(10.5f * s, juce::Font::bold)));
-    g.drawText(subtitle, juce::Rectangle<float>(26 * s, 60 * s, 420 * s, 14 * s), juce::Justification::centredLeft);
-    g.drawText("Z E N W A V E   L A B S", juce::Rectangle<float>(r.getWidth() - 330 * s, 60 * s, 304 * s, 14 * s), juce::Justification::centredRight);
+    g.setFont(juce::Font(juce::FontOptions(9.0f * s, juce::Font::bold)));
+    g.drawText("Z E N W A V E   L A B S", juce::Rectangle<float>(r.getWidth() - 330 * s, 66 * s, 304 * s, 12 * s), juce::Justification::centredRight);
 }
 
 // Editor helper: owns the cached static background and the animation clock.
