@@ -307,6 +307,14 @@ public:
     void drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool hover, bool down) override
     {
         auto r = b.getLocalBounds().toFloat().reduced(1.0f);
+        if (bool(b.getProperties()["chip"]))
+        {
+            const float rad = r.getHeight() * 0.5f;
+            if (hover || down) { for (int i = 3; i >= 1; --i) { g.setColour(accent2.withAlpha(0.06f)); g.fillRoundedRectangle(r.expanded(i * 1.6f), rad + i * 1.6f); } }
+            g.setColour(accent.withAlpha(down ? 0.45f : (hover ? 0.28f : 0.16f))); g.fillRoundedRectangle(r, rad);
+            g.setColour(hover || down ? accent2.withAlpha(0.9f) : accent.withAlpha(0.6f)); g.drawRoundedRectangle(r, rad, 0.8f);
+            return;
+        }
         if (bool(b.getProperties()["round"]))
         {
             r = r.withSizeKeepingCentre(juce::jmin(r.getWidth(), r.getHeight()), juce::jmin(r.getWidth(), r.getHeight()));
@@ -326,6 +334,23 @@ public:
     }
     void drawButtonText(juce::Graphics& g, juce::TextButton& b, bool hover, bool down) override
     {
+        if (bool(b.getProperties()["chip"]))
+        {
+            // small open-book glyph + tracked label
+            auto r = b.getLocalBounds().toFloat();
+            const float h = r.getHeight(), bx = r.getX() + h * 0.55f, by = r.getCentreY();
+            const auto col = hover || down ? juce::Colours::white : accentHi;
+            g.setColour(col);
+            juce::Path book;
+            book.addRoundedRectangle(bx - 5.5f, by - 3.2f, 5.0f, 6.4f, 1.0f);
+            book.addRoundedRectangle(bx + 0.5f, by - 3.2f, 5.0f, 6.4f, 1.0f);
+            g.strokePath(book, juce::PathStrokeType(1.0f));
+            g.drawLine(bx, by - 3.2f, bx, by + 3.2f, 1.0f);
+            juce::Font f(juce::FontOptions(h * 0.52f, juce::Font::bold)); f.setExtraKerningFactor(0.12f);
+            g.setFont(f);
+            g.drawText(b.getButtonText(), r.withTrimmedLeft(h * 1.1f).withTrimmedRight(h * 0.35f), juce::Justification::centred);
+            return;
+        }
         g.setFont(juce::Font(juce::FontOptions(b.getButtonText().length() <= 1 ? 18.0f : 10.5f, juce::Font::bold)));
         g.setColour(down ? juce::Colours::white : (hover ? Palette::text : accentHi));
         g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred);
@@ -576,7 +601,7 @@ inline void drawHeader(juce::Graphics& g, juce::Rectangle<float> r, float s, con
     // Wordmark right
     g.setColour(Palette::dim);
     g.setFont(juce::Font(juce::FontOptions(9.0f * s, juce::Font::bold)));
-    g.drawText("Z E N W A V E   L A B S", juce::Rectangle<float>(r.getWidth() - 330 * s, 66 * s, 304 * s, 12 * s), juce::Justification::centredRight);
+    g.drawText("Z E N W A V E   L A B S", juce::Rectangle<float>(r.getWidth() - 420 * s, 66 * s, 304 * s, 12 * s), juce::Justification::centredRight);
 }
 
 // Editor helper: owns the cached static background and the animation clock.

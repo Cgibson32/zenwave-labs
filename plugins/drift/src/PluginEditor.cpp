@@ -47,7 +47,7 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
 
     // Built-in manual + tooltips
     addAndMakeVisible(helpButton);
-    helpButton.getProperties().set("round", true);
+    helpButton.getProperties().set("chip", true);
     helpButton.setTooltip("Manual: what every knob does, quick start and recipes");
     helpButton.onClick = [this] { manual.show(); };
     addChildComponent(manual);
@@ -152,7 +152,7 @@ void DriftAudioProcessorEditor::resized()
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
     presetBar.setBounds(0, 0, getWidth(), S(60));
-    helpButton.setBounds(S(318), S(24), S(28), S(28));
+    helpButton.setBounds(S(776), S(61), S(82), S(18));
     manual.setBounds(getLocalBounds());
     presetBar.layoutScaled(s, 424);
     powerButton.setBounds(S(824), S(20), S(34), S(34));

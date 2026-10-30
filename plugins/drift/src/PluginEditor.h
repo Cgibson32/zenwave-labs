@@ -41,7 +41,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionAttach, wobbleDivAttach;
     double lastTick = 0.0;
     std::vector<zwui::Knob*> allKnobs;
-    juce::TextButton helpButton { "?" };
+    juce::TextButton helpButton { "MANUAL" };
     juce::TooltipWindow tooltips { this, 650 };
     zwui::ManualOverlay manual { lnf };   // last: sits on top of everything
 
