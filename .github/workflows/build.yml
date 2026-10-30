@@ -47,7 +47,7 @@ jobs:
       matrix:
         include:
           - name: macOS (VST3 + AU, universal)
-            os: macos-14
+            os: macos-15
             artifact: ZenWave-macOS
           - name: Windows (VST3)
             os: windows-latest
