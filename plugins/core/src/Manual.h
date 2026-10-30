@@ -20,7 +20,12 @@ namespace CoreManual
               { "WIDTH", "Stereo width of the wet signal. 100 % = natural, up to 150 % = extra wide, 0 = mono.", "width" },
               { "MIX", "Parallel blend. 100 % = fully processed; 30-50 % is the secret to parallel grit on vocals and drums.", "mix" },
               { "OUTPUT", "Output trim, -24 to +12 dB.", "output" },
-              { "SUB LOCK", "Everything below the LOW crossover passes clean and mono. Keep it on for anything with a sub. Off = the low band gets the LOW character too (tape on an 808 is lovely)." } } });
+              { "SUB LOCK", "Everything below the LOW crossover passes clean and mono. Keep it on for anything with a sub. Off = the low band gets the LOW character too (tape on an 808 is lovely)." },
+              { "BIT CRUSHER", "A crusher on the summed wet signal (the locked sub stays clean). CRUSH turns it on; BITS = word length from 16 (clean) down to 2 (destroyed); RATE = sample-rate reduction (aliasing, metallic); C.MIX = blend it under the saturation. Modulate BITS with a synced Random LFO for glitch rhythms.", "crushbits" },
+              { "RATE", "Sample-rate reduction of the crusher: 0 = full rate, 100 % = a handful of kHz. Aliasing becomes part of the sound.", "crushrate" },
+              { "C.MIX", "How much of the crushed signal replaces the clean saturated one.", "crushmix" },
+              { "LOW X / HIGH X", "The band split frequencies (also draggable as lines in the spectrum). LOW X 40-400 Hz, HIGH X 1-12 kHz.", "lowx" },
+              { "HIGH X", "Upper band split, 1-12 kHz.", "highx" } } });
 
         v.push_back({ "BANDS", "LOW | MID | HIGH. Each band has a character, its own drive, a parallel mix and a gain.",
             { { "Character", "Tape = smooth, rounded, musical. Tube = warm with even harmonics. Fold = wavefolder, synth-like and gnarly at high drive. Rectify = half-wave fuzz, aggressive and buzzy. Crush = bit and sample-rate reduction (deliberately aliased)." },

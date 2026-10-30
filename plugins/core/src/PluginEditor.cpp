@@ -19,10 +19,26 @@ CoreAudioProcessorEditor::CoreAudioProcessorEditor(CoreAudioProcessor& p)
         bandDrive[b].init(*this, processor.apvts, ParamIDs::bandDrive(b).toRawUTF8(), "DRIVE", false);
         bandMix[b].init  (*this, processor.apvts, ParamIDs::bandMix(b).toRawUTF8(),   "MIX",   false);
         bandGain[b].init (*this, processor.apvts, ParamIDs::bandGain(b).toRawUTF8(),  "GAIN",  false);
-        addAndMakeVisible(bandChar[b]); bandChar[b].addItemList({ "Tape", "Tube", "Fold", "Rectify", "Crush" }, 1);
-        bandChar[b].setTooltip(juce::String(bandNames[b]) + " band character: Tape (smooth), Tube (warm, even harmonics), Fold (wavefolder, synthy), Rectify (fuzz, aggressive), Crush (bit + rate reduction)");
+        bandTune[b].init (*this, processor.apvts, ParamIDs::bandTune(b).toRawUTF8(),  "TUNE",  false);
+        bandRes[b].init  (*this, processor.apvts, ParamIDs::bandRes(b).toRawUTF8(),   "RES",   false);
+        addAndMakeVisible(bandOn[b]); bandOn[b].getProperties().set("round", true);
+        bandOn[b].setTooltip(juce::String(bandNames[b]) + " band on/off. Off = this band passes through clean.");
+        bandOnAttach[b] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::bandOn(b), bandOn[b]);
+        addAndMakeVisible(bandSolo[b]); bandSolo[b].setButtonText("S");
+        bandSolo[b].setTooltip("Solo this band (mutes the others) - handy while tuning the resonance");
+        bandSoloAttach[b] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::bandSolo(b), bandSolo[b]);
+        addAndMakeVisible(bandChar[b]); bandChar[b].addItemList({ "Tape", "Tube", "Fold", "Rectify", "Crush", "Diode", "Octave", "Hard" }, 1);
+        bandChar[b].setTooltip(juce::String(bandNames[b]) + " band character: Tape (smooth), Tube (warm, even harmonics), Fold (wavefolder, synthy), Rectify (fuzz, aggressive), Crush (bit + rate reduction), Diode (asymmetric buzz), Octave (full-wave octave-up fuzz), Hard (digital clip)");
         bandCharAttach[b] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, ParamIDs::bandChar(b), bandChar[b]);
     }
+    crushBits.init(*this, processor.apvts, ParamIDs::crushBits, "BITS",  false);
+    crushRate.init(*this, processor.apvts, ParamIDs::crushRate, "RATE",  false);
+    crushMix.init (*this, processor.apvts, ParamIDs::crushMix,  "C.MIX", false);
+    lowX.init     (*this, processor.apvts, ParamIDs::lowX,      "LOW X", false);
+    highX.init    (*this, processor.apvts, ParamIDs::highX,     "HIGH X", false);
+    addAndMakeVisible(crushButton);
+    crushAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::crushOn, crushButton);
+    crushButton.setTooltip("Bit crusher on the summed wet signal: BITS = word length (16 clean - 2 destroyed), RATE = sample-rate reduction, C.MIX = blend. The locked sub stays clean.");
     lowCut.init (*this, processor.apvts, ParamIDs::lowCut,  "LOW CUT",  false);
     highCut.init(*this, processor.apvts, ParamIDs::highCut, "HIGH CUT", false);
     tilt.init   (*this, processor.apvts, ParamIDs::tilt,    "TILT",     false);
@@ -49,8 +65,8 @@ CoreAudioProcessorEditor::CoreAudioProcessorEditor(CoreAudioProcessor& p)
     learnButton.setTooltip("Learn: play the track for 6 seconds. Places the LOW crossover above your sub and the HIGH crossover under your top end so the bands fit this track.");
     learnButton.onClick = [this] { if (! learner.isActive()) learner.start(6.0f); };
 
-    allKnobs = { &drive, &heat, &focus, &width, &mix, &output, &lowCut, &highCut, &tilt };
-    for (int b = 0; b < 3; ++b) { allKnobs.push_back(&bandDrive[b]); allKnobs.push_back(&bandMix[b]); allKnobs.push_back(&bandGain[b]); }
+    allKnobs = { &drive, &heat, &focus, &width, &mix, &output, &lowCut, &highCut, &tilt, &crushBits, &crushRate, &crushMix, &lowX, &highX };
+    for (int b = 0; b < 3; ++b) { allKnobs.push_back(&bandDrive[b]); allKnobs.push_back(&bandMix[b]); allKnobs.push_back(&bandGain[b]); allKnobs.push_back(&bandTune[b]); allKnobs.push_back(&bandRes[b]); }
     installLocks();
 
     addAndMakeVisible(helpButton);
@@ -62,9 +78,9 @@ CoreAudioProcessorEditor::CoreAudioProcessorEditor(CoreAudioProcessor& p)
     zwui::applyTooltips(CoreManual::sections(), allKnobs);
 
     setResizable(true, true);
-    setResizeLimits(704, 712, 1408, 1424);
-    getConstrainer()->setFixedAspectRatio(880.0 / 890.0);
-    setSize(880, 890);
+    setResizeLimits(704, 792, 1408, 1584);
+    getConstrainer()->setFixedAspectRatio(880.0 / 990.0);
+    setSize(880, 990);
     lastTick = juce::Time::getMillisecondCounterHiRes();
     startTimerHz(30);
 }
@@ -133,6 +149,14 @@ void CoreAudioProcessorEditor::timerCallback()
     for (auto* k : allKnobs) k->slider.setAlpha(on ? 1.0f : 0.3f);
     bandDrive[0].slider.setAlpha(subLockButton.getToggleState() ? 0.35f : (on ? 1.0f : 0.3f));
     bandChar[0].setAlpha(subLockButton.getToggleState() ? 0.4f : 1.0f);
+    for (int b = 0; b < 3; ++b)
+    {
+        const float a = bandOn[b].getToggleState() ? 1.0f : 0.3f;
+        for (auto* k : { &bandDrive[b], &bandMix[b], &bandTune[b], &bandRes[b] }) k->slider.setAlpha(juce::jmin(k->slider.getAlpha(), a));
+        bandChar[b].setAlpha(juce::jmin(bandChar[b].getAlpha(), a));
+    }
+    const bool crushOn = crushButton.getToggleState();
+    for (auto* k : { &crushBits, &crushRate, &crushMix }) k->slider.setAlpha(crushOn ? (on ? 1.0f : 0.3f) : 0.35f);
     dividers.repaint();
     repaint();
 }
@@ -143,29 +167,59 @@ void CoreAudioProcessorEditor::paint(juce::Graphics& g)
     const float s = r.getWidth() / 880.0f;
     stage.render(g, getLocalBounds(), lnf.accent, lnf.accent2, processor.motion, 99);
     zwui::drawHeader(g, r, s, "CORE", "MULTIBAND HEAT", lnf.accent, lnf.accentHi, lnf.accent2);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 84 * s, 836 * s, 262 * s), "HEAT", lnf.accent, lnf.accent2, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 358 * s, 836 * s, 160 * s), "BANDS", lnf.accent2, lnf.accent, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 530 * s, 836 * s, 158 * s), "FIELD", lnf.accent, lnf.accent2, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 700 * s, 836 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 84 * s, 836 * s, 300 * s), "HEAT", lnf.accent, lnf.accent2, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 396 * s, 836 * s, 230 * s), "BANDS", lnf.accent2, lnf.accent, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 638 * s, 836 * s, 158 * s), "FIELD", lnf.accent, lnf.accent2, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 808 * s, 836 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
 
-    // band column titles + auto-gain readout + column separators
+    // heat row group labels
+    g.setFont(juce::Font(juce::FontOptions(8.5f * s, juce::Font::bold)));
+    g.setColour(zwui::Palette::dim);
+    g.drawText("BIT CRUSHER", juce::Rectangle<float>(176 * s, 374 * s, 320 * s, 10 * s), juce::Justification::centredLeft);
+    g.drawText("BAND SPLITS", juce::Rectangle<float>(536 * s, 374 * s, 160 * s, 10 * s), juce::Justification::centredLeft);
+    g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(162 * s), 300 * s, 372 * s); g.drawVerticalLine(int(522 * s), 300 * s, 372 * s);
+
+    // band column titles + auto-gain readout + column separators + resonance mini-curve
     const char* names[3] = { "LOW", "MID", "HIGH" };
-    g.setFont(juce::Font(juce::FontOptions(9.5f * s, juce::Font::bold)));
     for (int b = 0; b < 3; ++b)
     {
         const float x0 = (36 + b * 272) * s;
+        g.setFont(juce::Font(juce::FontOptions(9.5f * s, juce::Font::bold)));
         g.setColour(lnf.accentHi);
-        g.drawText(names[b], juce::Rectangle<float>(x0 + 118 * s, 385 * s, 60 * s, 14 * s), juce::Justification::centredLeft);
+        g.drawText(names[b], juce::Rectangle<float>(x0 + 170 * s, 410 * s, 40 * s, 14 * s), juce::Justification::centredLeft);
         const float ag = processor.bandGainDb[size_t(b)].load();
+        g.setFont(juce::Font(juce::FontOptions(8.5f * s, juce::Font::bold)));
         g.setColour(zwui::Palette::dim);
-        g.drawText("AUTO " + juce::String(ag > 0 ? "+" : "") + juce::String(ag, 1) + " dB", juce::Rectangle<float>(x0 + 150 * s, 385 * s, 100 * s, 14 * s), juce::Justification::centredLeft);
-        if (b > 0) { g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(x0 - 8 * s), 380 * s, 512 * s); }
+        g.drawText("AUTO " + juce::String(ag > 0 ? "+" : "") + juce::String(ag, 1) + " dB", juce::Rectangle<float>(x0 + 170 * s, 424 * s, 90 * s, 12 * s), juce::Justification::centredLeft);
+        if (b > 0) { g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(x0 - 8 * s), 408 * s, 616 * s); }
+        // resonance curve: the band's width with the TUNE peak and RES height
+        {
+            const auto r = juce::Rectangle<float>(x0 + 176 * s, 540 * s, 76 * s, 70 * s);
+            g.setColour(zwui::Palette::bg.withAlpha(0.7f)); g.fillRoundedRectangle(r, 8.0f * s);
+            const float lo = b == 0 ? 20.0f : (b == 1 ? float(lowX.slider.getValue()) : float(highX.slider.getValue()));
+            const float hi = b == 0 ? float(lowX.slider.getValue()) : (b == 1 ? float(highX.slider.getValue()) : 20000.0f);
+            const float tune = juce::jlimit(lo * 1.05f, hi * 0.95f, float(bandTune[b].slider.getValue()));
+            const float res = float(bandRes[b].slider.getValue());
+            const float px = r.getX() + 4 + (r.getWidth() - 8) * std::log(tune / lo) / std::log(hi / lo);
+            juce::Path curve; const float base = r.getBottom() - 12 * s;
+            for (int i = 0; i <= 40; ++i)
+            {
+                const float x = r.getX() + 4 + (r.getWidth() - 8) * i / 40.0f;
+                const float d = (x - px) / ((r.getWidth() - 8) * (0.08f + 0.22f * (1.0f - res)));
+                const float y = base - res * (r.getHeight() - 24 * s) * std::exp(-d * d);
+                if (i == 0) curve.startNewSubPath(x, y); else curve.lineTo(x, y);
+            }
+            zwui::glowStroke(g, curve, lnf.accent2.withAlpha(0.3f + 0.6f * res), 1.3f * s, 0.6f);
+            g.setColour(lnf.accent.withAlpha(0.5f)); g.drawRoundedRectangle(r, 8.0f * s, 1.0f);
+            g.setFont(juce::Font(juce::FontOptions(7.5f * s, juce::Font::bold))); g.setColour(zwui::Palette::dim);
+            g.drawText("SELECTIVE SAT", r.withTrimmedTop(r.getHeight() - 11 * s), juce::Justification::centred);
+        }
     }
 
-    scope.draw(g, juce::Rectangle<float>(40 * s, 548 * s, 128 * s, 128 * s), lnf.accent, lnf.accent2, processor.motion.pulse);
+    scope.draw(g, juce::Rectangle<float>(40 * s, 656 * s, 128 * s, 128 * s), lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::EqCurve eq { float(lowCut.slider.getValue()), float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
-    zwui::drawEqField(g, juce::Rectangle<float>(320 * s, 552 * s, 278 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
+    zwui::drawEqField(g, juce::Rectangle<float>(320 * s, 660 * s, 278 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
@@ -183,27 +237,37 @@ void CoreAudioProcessorEditor::resized()
     zwui::Knob* bigs[] = { &drive, &heat, &focus, &width, &mix, &output };
     int x = S(44);
     for (auto* k : bigs) { k->layout(x, S(126), S(126), S(160), S(16)); x += S(134); }
-    subLockButton.setBounds(S(52), S(300), S(96), S(26));
+    subLockButton.setBounds(S(52), S(322), S(96), S(26));
+    crushButton.setBounds(S(176), S(322), S(76), S(26));
+    crushBits.layout(S(262), S(306), S(72), S(66), S(11));
+    crushRate.layout(S(342), S(306), S(72), S(66), S(11));
+    crushMix.layout (S(422), S(306), S(72), S(66), S(11));
+    lowX.layout     (S(536), S(306), S(72), S(66), S(11));
+    highX.layout    (S(616), S(306), S(72), S(66), S(11));
 
     for (int b = 0; b < 3; ++b)
     {
         const int x0 = S(36 + b * 272);
-        bandChar[b].setBounds(x0, S(382), S(110), S(20));
-        bandDrive[b].layout(x0,          S(422), S(80), S(88), S(12));
-        bandMix[b].layout  (x0 + S(86),  S(422), S(80), S(88), S(12));
-        bandGain[b].layout (x0 + S(172), S(422), S(80), S(88), S(12));
+        bandChar[b].setBounds(x0, S(410), S(100), S(20));
+        bandOn[b].setBounds(x0 + S(106), S(408), S(24), S(24));
+        bandSolo[b].setBounds(x0 + S(136), S(410), S(28), S(20));
+        bandDrive[b].layout(x0,          S(452), S(80), S(80), S(12));
+        bandMix[b].layout  (x0 + S(86),  S(452), S(80), S(80), S(12));
+        bandGain[b].layout (x0 + S(172), S(452), S(80), S(80), S(12));
+        bandTune[b].layout (x0,          S(546), S(80), S(72), S(12));
+        bandRes[b].layout  (x0 + S(86),  S(546), S(80), S(72), S(12));
     }
 
-    pad.setBounds(S(184), S(550), S(122), S(106));
-    glideBox.setBounds(S(184), S(660), S(122), S(18));
-    dividers.setBounds(S(320), S(552), S(278), S(120));
-    learnButton.setBounds(S(744), S(536), S(100), S(17));
+    pad.setBounds(S(184), S(658), S(122), S(106));
+    glideBox.setBounds(S(184), S(768), S(122), S(18));
+    dividers.setBounds(S(320), S(660), S(278), S(120));
+    learnButton.setBounds(S(744), S(644), S(100), S(17));
     zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };
     x = S(610);
-    for (auto* k : tone) { k->layout(x, S(572), S(80), S(84), S(12)); x += S(84); }
-    lowSlopeBox.setBounds(S(614), S(662), S(72), S(18));
-    highSlopeBox.setBounds(S(698), S(662), S(72), S(18));
+    for (auto* k : tone) { k->layout(x, S(680), S(80), S(84), S(12)); x += S(84); }
+    lowSlopeBox.setBounds(S(614), S(770), S(72), S(18));
+    highSlopeBox.setBounds(S(698), S(770), S(72), S(18));
 
-    modPanel.setBounds(S(22), S(700), S(836), S(170));
+    modPanel.setBounds(S(22), S(808), S(836), S(170));
     modPanel.layoutScaled(s);
 }

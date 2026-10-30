@@ -28,15 +28,26 @@ namespace ParamIDs
     inline juce::String bandDrive(int b) { return "b" + juce::String(b + 1) + "drive"; }
     inline juce::String bandMix  (int b) { return "b" + juce::String(b + 1) + "mix"; }
     inline juce::String bandGain (int b) { return "b" + juce::String(b + 1) + "gain"; }
+    inline juce::String bandOn   (int b) { return "b" + juce::String(b + 1) + "on"; }
+    inline juce::String bandSolo (int b) { return "b" + juce::String(b + 1) + "solo"; }
+    inline juce::String bandTune (int b) { return "b" + juce::String(b + 1) + "tune"; }
+    inline juce::String bandRes  (int b) { return "b" + juce::String(b + 1) + "res"; }
+    inline constexpr auto crushOn   = "crushon";
+    inline constexpr auto crushBits = "crushbits";
+    inline constexpr auto crushRate = "crushrate";
+    inline constexpr auto crushMix  = "crushmix";
 }
 
-namespace ModT { enum { Drive, Heat, Focus, Width, Mix, LowX, HighX, LowDrive, MidDrive, HighDrive, LowCut, HighCut, Tilt, Count }; }
+namespace ModT { enum { Drive, Heat, Focus, Width, Mix, LowX, HighX, LowDrive, MidDrive, HighDrive, LowCut, HighCut, Tilt,
+                        LowTune, MidTune, HighTune, LowRes, MidRes, HighRes, CrushBits, CrushRate, Count }; }
 inline const std::vector<zwui::ModTarget>& coreModTargets()
 {
     static const std::vector<zwui::ModTarget> t {
         { ParamIDs::drive, "Drive" }, { ParamIDs::heat, "Heat" }, { ParamIDs::focus, "Focus" }, { ParamIDs::width, "Width" }, { ParamIDs::mix, "Mix" },
         { ParamIDs::lowX, "Low X" }, { ParamIDs::highX, "High X" }, { "b1drive", "Low Drive" }, { "b2drive", "Mid Drive" }, { "b3drive", "High Drive" },
-        { ParamIDs::lowCut, "Low Cut" }, { ParamIDs::highCut, "High Cut" }, { ParamIDs::tilt, "Tilt" } };
+        { ParamIDs::lowCut, "Low Cut" }, { ParamIDs::highCut, "High Cut" }, { ParamIDs::tilt, "Tilt" },
+        { "b1tune", "Low Tune" }, { "b2tune", "Mid Tune" }, { "b3tune", "High Tune" }, { "b1res", "Low Res" }, { "b2res", "Mid Res" }, { "b3res", "High Res" },
+        { ParamIDs::crushBits, "Crush Bits" }, { ParamIDs::crushRate, "Crush Rate" } };
     return t;
 }
 
@@ -91,7 +102,8 @@ private:
     double hostBpm = 120.0;
 
     std::atomic<float>* pOutput{}, * pSubLock{}, * pPower{}, * pLowSlope{}, * pHighSlope{};
-    std::atomic<float>* pBandChar[3]{}, * pBandMix[3]{}, * pBandGain[3]{};
+    std::atomic<float>* pBandChar[3]{}, * pBandMix[3]{}, * pBandGain[3]{}, * pBandOn[3]{}, * pBandSolo[3]{};
+    std::atomic<float>* pCrushOn{}, * pCrushMix{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CoreAudioProcessor)
 };

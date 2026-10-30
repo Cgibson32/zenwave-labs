@@ -91,9 +91,14 @@ private:
     zwui::Stage stage;
 
     zwui::Knob drive, heat, focus, width, mix;                 // macro row
-    zwui::Knob bandDrive[3], bandMix[3], bandGain[3];          // bands
+    zwui::Knob bandDrive[3], bandMix[3], bandGain[3], bandTune[3], bandRes[3];   // bands
     juce::ComboBox bandChar[3];
+    juce::ToggleButton bandOn[3], bandSolo[3];
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bandCharAttach[3];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bandOnAttach[3], bandSoloAttach[3];
+    zwui::Knob crushBits, crushRate, crushMix, lowX, highX;    // heat row
+    juce::ToggleButton crushButton { "CRUSH" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> crushAttach;
     zwui::Knob lowCut, highCut, tilt, output;
     juce::ComboBox lowSlopeBox, highSlopeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;

@@ -19,7 +19,11 @@ CoreAudioProcessor::CoreAudioProcessor()
         pBandChar[b] = apvts.getRawParameterValue(ParamIDs::bandChar(b));
         pBandMix[b]  = apvts.getRawParameterValue(ParamIDs::bandMix(b));
         pBandGain[b] = apvts.getRawParameterValue(ParamIDs::bandGain(b));
+        pBandOn[b]   = apvts.getRawParameterValue(ParamIDs::bandOn(b));
+        pBandSolo[b] = apvts.getRawParameterValue(ParamIDs::bandSolo(b));
     }
+    pCrushOn = apvts.getRawParameterValue(ParamIDs::crushOn);
+    pCrushMix = apvts.getRawParameterValue(ParamIDs::crushMix);
     mod.attach(apvts, coreModTargets());
     pad.attach(apvts);
     bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::subLock,
@@ -29,7 +33,9 @@ CoreAudioProcessor::CoreAudioProcessor()
     bank.setSafeRange(ParamIDs::width, 0.7f, 1.4f);
     bank.setSafeRange(ParamIDs::lowCut, 20.0f, 200.0f);
     bank.setSafeRange(ParamIDs::highCut, 5000.0f, 20000.0f);
-    for (int b = 0; b < 3; ++b) bank.setSafeRange(ParamIDs::bandGain(b).toRawUTF8(), -6.0f, 6.0f);
+    for (int b = 0; b < 3; ++b) { bank.setSafeRange(ParamIDs::bandGain(b).toRawUTF8(), -6.0f, 6.0f); bank.setSafeRange(ParamIDs::bandRes(b).toRawUTF8(), 0.0f, 0.7f); }
+    for (int b = 0; b < 3; ++b) bank.setAlwaysLocked({ ParamIDs::bandOn(b).toRawUTF8(), ParamIDs::bandSolo(b).toRawUTF8() });
+    bank.setSafeRange(ParamIDs::crushBits, 5.0f, 16.0f); bank.setSafeRange(ParamIDs::crushRate, 0.0f, 0.6f);
 }
 
 APVTS::ParameterLayout CoreAudioProcessor::createLayout()
@@ -60,7 +66,7 @@ APVTS::ParameterLayout CoreAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::highX, 1 }, "High X", Rng{ 1000.0f, 12000.0f, 1.0f, 0.5f }, 3500.0f, hzAttr));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::subLock, 1 }, "Sub Lock", true));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::power, 1 }, "Power", true));
-    const juce::StringArray chars { "Tape", "Tube", "Fold", "Rectify", "Crush" };
+    const juce::StringArray chars { "Tape", "Tube", "Fold", "Rectify", "Crush", "Diode", "Octave", "Hard" };
     const char* bandNames[3] = { "Low", "Mid", "High" };
     for (int b = 0; b < 3; ++b)
     {
@@ -68,7 +74,17 @@ APVTS::ParameterLayout CoreAudioProcessor::createLayout()
         params.push_back(pct(ParamIDs::bandDrive(b), juce::String(bandNames[b]) + " Drive", 0.30f));
         params.push_back(pct(ParamIDs::bandMix(b), juce::String(bandNames[b]) + " Mix", 1.0f));
         params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::bandGain(b), 1 }, juce::String(bandNames[b]) + " Gain", Rng{ -18.0f, 18.0f, 0.1f }, 0.0f, dbAttr));
+        params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::bandOn(b), 1 }, juce::String(bandNames[b]) + " On", true));
+        params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::bandSolo(b), 1 }, juce::String(bandNames[b]) + " Solo", false));
+        const float tuneDef[3] = { 80.0f, 800.0f, 6000.0f };
+        params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::bandTune(b), 1 }, juce::String(bandNames[b]) + " Tune", Rng{ 20.0f, 20000.0f, 0.1f, 0.25f }, tuneDef[b], hzAttr));
+        params.push_back(pct(ParamIDs::bandRes(b), juce::String(bandNames[b]) + " Resonance", 0.0f));
     }
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::crushOn, 1 }, "Crush", false));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::crushBits, 1 }, "Crush Bits", Rng{ 2.0f, 16.0f, 0.01f }, 12.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(v, 1) + " bit"; })));
+    params.push_back(pct(ParamIDs::crushRate, "Crush Rate", 0.0f));
+    params.push_back(pct(ParamIDs::crushMix, "Crush Mix", 1.0f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::lowCut, 1 }, "Low Cut", Rng{ 20.0f, 2000.0f, 0.1f, 0.35f }, 20.0f, hzAttr));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::highCut, 1 }, "High Cut", Rng{ 1000.0f, 20000.0f, 1.0f, 0.5f }, 20000.0f, hzAttr));
     params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::lowSlope, 1 }, "Low Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
@@ -112,14 +128,19 @@ void CoreAudioProcessor::updateEngineParams()
     c.output = pOutput->load();
     c.lowX = M(ModT::LowX); c.highX = juce::jmax(M(ModT::HighX), c.lowX * 2.5f);
     c.subLock = pSubLock->load() > 0.5f;
-    const int driveT[3] = { ModT::LowDrive, ModT::MidDrive, ModT::HighDrive };
+    const int driveT[3] = { ModT::LowDrive, ModT::MidDrive, ModT::HighDrive }, tuneT[3] = { ModT::LowTune, ModT::MidTune, ModT::HighTune }, resT[3] = { ModT::LowRes, ModT::MidRes, ModT::HighRes };
     for (int b = 0; b < 3; ++b)
     {
         c.band[b].character = int(pBandChar[b]->load());
         c.band[b].drive = M(driveT[b]);
         c.band[b].mix = pBandMix[b]->load();
         c.band[b].gain = pBandGain[b]->load();
+        c.band[b].enabled = pBandOn[b]->load() > 0.5f;
+        c.band[b].solo = pBandSolo[b]->load() > 0.5f;
+        c.band[b].tuneHz = M(tuneT[b]);
+        c.band[b].res = M(resT[b]);
     }
+    c.crush.on = pCrushOn->load() > 0.5f; c.crush.bits = M(ModT::CrushBits); c.crush.rate = M(ModT::CrushRate); c.crush.mix = pCrushMix->load();
     c.lowCutHz = M(ModT::LowCut); c.highCutHz = M(ModT::HighCut);
     c.lowSlope = int(pLowSlope->load()); c.highSlope = int(pHighSlope->load()); c.tilt = M(ModT::Tilt);
     engine.setParams(c);
