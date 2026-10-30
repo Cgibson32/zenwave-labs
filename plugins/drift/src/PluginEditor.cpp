@@ -43,6 +43,9 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     addAndMakeVisible(presetBar);
     addAndMakeVisible(modPanel);
     addAndMakeVisible(orbitButton);
+    addAndMakeVisible(freezeQBox); freezeQBox.addItemList(zwui::FreezeQuantizer::names(), 1);
+    freezeQBox.setTooltip("Freeze timing: Free = instant. Beat / Bar = Freeze engages and releases on the next beat or bar while the host plays - perfectly timed throws and drops.");
+    freezeQAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, zwui::FreezeQuantizer::paramId, freezeQBox);
     addAndMakeVisible(learnButton);
     learnButton.getProperties().set("chip", true);
     learnButton.setTooltip("Learn: play the track for 6 seconds. Sets the wet Low Cut just above your sub and the High Cut where your top end ends" + juce::String(""" + (' , and Gravity under the sub' if plug=='umbra' else '') + """) + ", so the effect sits in this track.");
@@ -128,6 +131,7 @@ void DriftAudioProcessorEditor::timerCallback()
     modPanel.tick();
     if (learner.feed(analyserIn.levels, dt)) applyLearn();
     learnButton.setButtonText(learner.isActive() ? "LEARNING " + juce::String(int(learner.progress() * 100)) + "%" : "LEARN");
+    freezeButton.setAlpha(processor.freezeQ.pending ? 0.55f + 0.45f * std::abs(std::sin(processor.motion.time * 9.0f)) : 1.0f);
     { const int n = processor.orbitLink.peers.load(); orbitButton.setButtonText(orbitButton.getToggleState() && n > 1 ? "ORBIT x" + juce::String(n) : "ORBIT"); }
     pad.setHome(processor.padXForTime(float(time.slider.getValue())), processor.padYForFeedback(float(feedback.slider.getValue())));
     pad.setColumns(syncButton.getToggleState() ? 9 : 0);
@@ -173,8 +177,9 @@ void DriftAudioProcessorEditor::resized()
     manual.setBounds(getLocalBounds());
     presetBar.layoutScaled(s, 424);
     powerButton.setBounds(S(824), S(20), S(34), S(34));
-    freezeButton.setBounds(S(752), S(300), S(84), S(26));
-    orbitButton.setBounds(S(656), S(300), S(84), S(26));
+    orbitButton.setBounds(S(588), S(300), S(76), S(26));
+    freezeButton.setBounds(S(672), S(300), S(86), S(26));
+    freezeQBox.setBounds(S(764), S(300), S(74), S(26));
     learnButton.setBounds(S(744), S(536), S(100), S(17));
     modPanel.setBounds(S(22), S(700), S(836), S(170));
     modPanel.layoutScaled(s);

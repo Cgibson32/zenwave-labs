@@ -37,7 +37,8 @@ DriftAudioProcessor::DriftAudioProcessor()
     pColor = apvts.getRawParameterValue(ParamIDs::color);
     mod.attach(apvts, driftModTargets());
     pad.attach(apvts);
-    bank.setAlwaysLocked({ zwui::PadIDs::x, zwui::PadIDs::y, zwui::PadIDs::hold, zwui::PadIDs::glide });
+    bank.setAlwaysLocked({ zwui::PadIDs::x, zwui::PadIDs::y, zwui::PadIDs::hold, zwui::PadIDs::glide, zwui::FreezeQuantizer::paramId });
+    pFreezeQ = apvts.getRawParameterValue(zwui::FreezeQuantizer::paramId);
     bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze, zwui::OrbitBus::orbitParamId });
     bank.setSafeRange(ParamIDs::feedback, 0.0f, 0.82f);
     bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
@@ -110,13 +111,18 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
     zwui::addModParams(params, driftModTargets());
     zwui::addOrbitParam(params);
     zwui::addPadParams(params);
+    zwui::FreezeQuantizer::addParam(params);
     return { params.begin(), params.end() };
 }
 
 void DriftAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
-    engine.prepare(sampleRate, samplesPerBlock);
+    engine.prepare(sampleRate * 2.0, samplesPerBlock * 2);
+    engine.setInternalOversampling(2);
+    osBuf.setSize(2, samplesPerBlock * 2); osWet.setSize(2, samplesPerBlock * 2);
+    for (int c = 0; c < 2; ++c) { osUp[c].reset(); osDown[c].reset(); osWetDown[c].reset(); }
+    setLatencySamples(3);
     mod.prepare(sampleRate);
     pad.prepare(sampleRate);
     wetScratch.setSize(2, samplesPerBlock);
@@ -174,7 +180,7 @@ void DriftAudioProcessor::updateEngineParams()
     p.width      = M(ModT::Width);
     p.spread     = M(ModT::Spread);
     p.pingPong   = pPingPong->load() > 0.5f;
-    p.freeze     = pFreeze->load() > 0.5f;
+    p.freeze     = freezeQ.effective;
     p.mix        = M(ModT::Mix);
     p.output     = pOutput->load();
     p.wobbleHz   = pWobbleSync->load() > 0.5f
@@ -213,11 +219,33 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         const int len = juce::jmin(kSub, n - start);
         mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
         pad.process(len, hostBpm);
+        {
+            const double ppqEnd = playing ? ppq + len / currentSampleRate * hostBpm / 60.0 : ppq;
+            const bool want = pFreeze->load() > 0.5f;
+            freezeQ.advance(want, int(pFreezeQ->load()), playing, ppq, ppqEnd);
+        }
         updateEngineParams();
-        if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));
-        if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);
-        else if (numOut == 1) engine.processMono(buffer.getWritePointer(0, start), len);
-        engine.setWetTap(nullptr, nullptr);
+        // --- 2x oversampled engine pass ---
+        {
+            const int chans = numOut >= 2 ? 2 : 1;
+            float* up[2] = { osBuf.getWritePointer(0), osBuf.getWritePointer(1) };
+            for (int c = 0; c < chans; ++c)
+            {
+                const float* src = buffer.getReadPointer(c, start);
+                for (int i = 0; i < len; ++i) osUp[c].upsample(src[i], up[c][2 * i], up[c][2 * i + 1]);
+            }
+            const bool tap = wetScratch.getNumSamples() >= n && chans == 2;
+            if (tap) engine.setWetTap(osWet.getWritePointer(0), osWet.getWritePointer(1));
+            if (chans == 2) engine.process(up[0], up[1], len * 2);
+            else engine.processMono(up[0], len * 2);
+            engine.setWetTap(nullptr, nullptr);
+            for (int c = 0; c < chans; ++c)
+            {
+                float* dst = buffer.getWritePointer(c, start);
+                for (int i = 0; i < len; ++i) dst[i] = osDown[c].downsample(up[c][2 * i], up[c][2 * i + 1]);
+                if (tap) { const float* w = osWet.getReadPointer(c); float* wd = wetScratch.getWritePointer(c, start); for (int i = 0; i < len; ++i) wd[i] = osWetDown[c].downsample(w[2 * i], w[2 * i + 1]); }
+            }
+        }
         if (playing) ppq += len / currentSampleRate * hostBpm / 60.0;
     }
     for (int ch = 2; ch < numOut; ++ch) buffer.clear(ch, 0, n);

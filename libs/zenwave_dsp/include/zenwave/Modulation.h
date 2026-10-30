@@ -1,4 +1,5 @@
 #pragma once
+#include "DelayLine.h"
 // ZenWave DSP — LFOs and a tape "wow & flutter" generator.
 
 #include "Utils.h"
@@ -80,6 +81,31 @@ private:
     double sampleRate = 44100.0;
     float amount = 0.0f;
     LFO wow, flutter, drift;
+};
+
+
+// Granular octave-up shifter: two read heads sweeping a short delay line at 2x speed with a
+// raised-cosine crossfade. Cheap, smooth, and exactly what a shimmer reverb needs.
+class OctaveShifter
+{
+public:
+    void prepare(double sr) noexcept { line.prepare(sr, 0.2f); win = float(sr * 0.045); phase = 0.0f; }
+    void reset() noexcept { line.reset(); phase = 0.0f; }
+    float process(float x) noexcept
+    {
+        line.write(x);
+        // head A delay runs win -> 0 (reading faster than writing = pitch up one octave); head B is half a cycle behind
+        const float dA = win * (1.0f - phase);
+        const float pB = phase < 0.5f ? phase + 0.5f : phase - 0.5f;
+        const float dB = win * (1.0f - pB);
+        const float gA = 0.5f - 0.5f * std::cos(phase * 6.2831853f);
+        const float gB = 1.0f - gA;
+        const float y = line.read(std::max(1.0f, dA)) * gA + line.read(std::max(1.0f, dB)) * gB;
+        phase += 1.0f / win; if (phase >= 1.0f) phase -= 1.0f;
+        return y;
+    }
+private:
+    DelayLine line; float win = 2000.0f, phase = 0.0f;
 };
 
 } // namespace zw

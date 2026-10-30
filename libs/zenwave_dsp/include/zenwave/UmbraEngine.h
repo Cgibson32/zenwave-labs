@@ -37,6 +37,7 @@ struct UmbraParams
     int   highSlope  = 1;
     float tilt       = 0.0f;    // -1..1 (dark..bright)
     float bloom      = 0.0f;    // 0..1 loud input → longer decay (signature "opening" tail)
+    bool  shimmer    = false;   // octave-up tail regeneration
 };
 
 class UmbraEngine
@@ -56,6 +57,9 @@ public:
         {
             pre[c].prepare(sr, 0.3f);
             er[c].prepare(sr, 0.12f);
+            shifter[c].prepare(sr);
+            shimLP[c].setSampleRate(sr); shimLP[c].setLowpass(5500.0f);
+            shimHP[c].setSampleRate(sr); shimHP[c].setHighpass(180.0f);
             xoverLP[c].setSampleRate(sr); xoverLP[c].setMode(SVF::Mode::Lowpass);  xoverLP[c].setResonance(0.5f);
             xoverHP[c].setSampleRate(sr); xoverHP[c].setMode(SVF::Mode::Highpass); xoverHP[c].setResonance(0.5f);
             tiltLP[c].setSampleRate(sr);
@@ -63,6 +67,7 @@ public:
             tiltHP[c].setHighpass(800.0f);
         }
         for (auto* s : { &smMix, &smOut, &smWidth, &smPre, &smEarly }) { s->setSampleRate(sr); s->setTime(30.0f); }
+        smShim.setSampleRate(sr); smShim.setTime(80.0f); smShim.reset(0.0f);
         smPre.setTime(80.0f);
         setParams(params);
         smMix.reset(params.mix); smOut.reset(dbToGain(params.output)); smWidth.reset(params.width);
@@ -74,7 +79,8 @@ public:
     void reset() noexcept
     {
         reverb.reset();
-        for (int c = 0; c < 2; ++c) { pre[c].reset(); er[c].reset(); xoverLP[c].reset(); xoverHP[c].reset(); tiltLP[c].reset(); tiltHP[c].reset(); }
+        for (int c = 0; c < 2; ++c) { pre[c].reset(); er[c].reset(); xoverLP[c].reset(); xoverHP[c].reset(); tiltLP[c].reset(); tiltHP[c].reset(); shifter[c].reset(); shimLP[c].reset(); shimHP[c].reset(); }
+        lastL = lastR = 0.0f;
     }
 
     void setParams(const UmbraParams& p) noexcept
@@ -87,6 +93,7 @@ public:
         reverb.setModDepth(p.motion);
         reverb.setModRate(p.motionRate);
         reverb.setFreeze(p.freeze);
+        smShim.setTarget(p.shimmer ? 1.0f : 0.0f);
         // Dark: in-loop damping 12 kHz → 1.2 kHz, plus wet-path tilt
         reverb.setDamping(lerp(12000.0f, 1200.0f, p.dark * p.dark));
         tiltAmount = p.dark;
@@ -142,9 +149,18 @@ public:
                 eR += er[1].read(d) * kErGain[(t + 3) % 6];
             }
 
+            // Shimmer: last sample of the tail, an octave up, back into the input (band-limited, stable gain)
+            const float sh = smShim.next();
+            float shL = 0.0f, shR = 0.0f;
+            if (sh > 0.0005f)
+            {
+                shL = shimLP[0].process(shimHP[0].process(shifter[0].process(lastL))) * 0.42f * sh;
+                shR = shimLP[1].process(shimHP[1].process(shifter[1].process(lastR))) * 0.42f * sh;
+            }
             // Late reverb
             float lL = 0.0f, lR = 0.0f;
-            reverb.process(pL + eL * 0.3f, pR + eR * 0.3f, lL, lR);
+            reverb.process(pL + eL * 0.3f + shL, pR + eR * 0.3f + shR, lL, lR);
+            lastL = fastTanh(lL); lastR = fastTanh(lR);
 
             float wetL = lL * 1.4f + eL * erLvl * 0.6f;
             float wetR = lR * 1.4f + eR * erLvl * 0.6f;
@@ -209,7 +225,8 @@ private:
     float baseDecay = 0.6f; unsigned bloomCounter = 0;
     CutFilter lowCut[2], highCut[2];
     TiltEQ tiltEq[2];
-    Smoother smMix, smOut, smWidth, smPre, smEarly;
+    Smoother smMix, smOut, smWidth, smPre, smEarly, smShim;
+    OctaveShifter shifter[2]; OnePole shimLP[2], shimHP[2]; float lastL = 0.0f, lastR = 0.0f;
 public:
     void setWetTap(float* l, float* r) noexcept { wetTapL = l; wetTapR = r; }
 private:

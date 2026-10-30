@@ -24,6 +24,7 @@ namespace DriftManual
               { "PING-PONG", "Alternates repeats left/right. Turn off for a centred, mono-compatible echo." },
               { "ORBIT", "Links this plugin with every other ZenWave plugin on your system that has Orbit on. Freeze one and they all freeze together (Drift's loop and Umbra's tail lock at the same instant). The button shows how many are in orbit." },
               { "FREEZE", "Captures what's in the loop and holds it forever, clean. Great for drops and transitions - set it, then sweep the filters. Automate it in your DAW." },
+              { "Freeze timing (Free / Beat / Bar)", "With Beat or Bar selected, Freeze waits for the next beat or bar while the host plays, both going in and coming out - a throw that always lands on the grid. The button pulses while it waits." },
               { "MIX", "Dry/wet balance. The dry path is untouched.", "mix" } } });
 
         v.push_back({ "DEEP SPACE", "Fine control over the loop's tone, the reverb and the stereo image.",

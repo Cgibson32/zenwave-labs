@@ -21,7 +21,9 @@ namespace UmbraManual
               { "MIX", "Dry/wet balance. The dry path is untouched.", "mix" },
               { "SYNC + division / MOTION RATE", "The internal modulation that keeps the tail alive can run free (MOTION RATE multiplier) or lock to the tempo so the slow swirl completes once per division." },
               { "ORBIT", "Links this plugin with every other ZenWave plugin on your system that has Orbit on. Freeze one and they all freeze together (Drift's loop and Umbra's tail lock at the same instant). The button shows how many are in orbit." },
-              { "FREEZE", "Holds the current tail forever as a clean, infinite pad. Automate it for breakdowns; sweep DARK and the filters while frozen." } } });
+              { "FREEZE", "Holds the current tail forever as a clean, infinite pad. Automate it for breakdowns; sweep DARK and the filters while frozen." },
+              { "Freeze timing (Free / Beat / Bar)", "With Beat or Bar selected, Freeze waits for the next beat or bar while the host plays, both going in and coming out - so a freeze always lands on the grid. The button pulses while it waits." },
+              { "SHIMMER", "Feeds the tail back into the space an octave up on every pass: slowly cascading, angelic highs. Best with long DECAY and a touch of DARK so it blooms rather than screams. Try it frozen." } } });
 
         v.push_back({ "SHAPE", "Fine control of the tail's behaviour.",
             { { "BLOOM", "Loud input temporarily opens the decay - hits grow a longer tail, quiet parts stay tight. The 'opening' sound of the Signature preset.", "bloom" },

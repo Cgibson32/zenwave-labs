@@ -33,6 +33,7 @@ namespace ParamIDs
     inline constexpr auto highSlope  = "highslope";
     inline constexpr auto tilt       = "tilt";
     inline constexpr auto bloom      = "bloom";
+    inline constexpr auto shimmer    = "shimmer";
 }
 
 namespace ModT { enum { PreDelay, Size, Decay, Dark, Density, Motion, Gravity, Early, Duck, Width, Mix, MotionRate, LowCut, HighCut, Tilt, Bloom, Count }; }
@@ -81,7 +82,10 @@ public:
     zwui::StereoTap stereo;
     zwui::ModMatrix mod;
     zwui::OrbitLink orbitLink { apvts, ParamIDs::freeze };
-    zwui::PadEngine pad;   // X = decay, Y = mix (a reverb "throw")
+    zwui::PadEngine pad;
+    zwui::FreezeQuantizer freezeQ;
+    std::atomic<float>* pFreezeQ{};
+    std::atomic<float>* pShimmer{};   // X = decay, Y = mix (a reverb "throw")
     juce::AudioBuffer<float> wetScratch;   // post-EQ wet signal for the Field analyser
     zwui::PresetBank bank { apvts, "Umbra" };
     double currentSampleRate = 48000.0;

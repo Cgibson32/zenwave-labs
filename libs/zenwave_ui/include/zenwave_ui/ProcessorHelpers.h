@@ -160,4 +160,26 @@ private:
     std::atomic<int> writePos { 0 };
 };
 
+
+// Beat-release freeze: the Freeze button is quantised to the next beat or bar while the host
+// plays (Free = instant). Call advance() per sub-block with the ppq span it covers.
+struct FreezeQuantizer
+{
+    static constexpr auto paramId = "freezeq";
+    static juce::StringArray names() { return { "Free", "Beat", "Bar" }; }
+    static void addParam(std::vector<std::unique_ptr<juce::RangedAudioParameter>>& params)
+    { params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{ paramId, 1 }, "Freeze Quantize", names(), 0)); }
+
+    bool advance(bool wanted, int mode, bool playing, double ppqStart, double ppqEnd)
+    {
+        if (wanted == effective) { pending = false; return effective; }
+        if (mode == 0 || ! playing) { effective = wanted; pending = false; return effective; }
+        const double unit = mode == 1 ? 1.0 : 4.0;
+        pending = true;
+        if (std::floor(ppqEnd / unit + 1e-6) > std::floor(ppqStart / unit + 1e-6)) { effective = wanted; pending = false; }
+        return effective;
+    }
+    bool effective = false, pending = false;   // pending: UI blinks the button until the boundary
+};
+
 } // namespace zwui

@@ -82,6 +82,9 @@ public:
         reset();
     }
 
+    // When the host runs the whole engine at 2x, the tape stage needs only 2x of its own (4x total)
+    void setInternalOversampling(int factor) noexcept { for (auto& s : sat) s.setOversampling(factor); }
+
     void reset() noexcept
     {
         for (int c = 0; c < 2; ++c) { delay[c].reset(); ageLP[c].reset(); ageHP[c].reset(); sat[c].reset(); preHP[c].reset(); colorF[c].reset(); }

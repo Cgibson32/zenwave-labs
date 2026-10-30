@@ -85,6 +85,8 @@ public:
     zwui::ModMatrix mod;
     zwui::OrbitLink orbitLink { apvts, ParamIDs::freeze };
     zwui::PadEngine pad;
+    zwui::FreezeQuantizer freezeQ;
+    std::atomic<float>* pFreezeQ{};
     // Perform-pad mapping (shared with the editor so "home" draws in the right place)
     float padTimeMs(float x) const;
     float padXForTime(float ms) const;
@@ -92,6 +94,9 @@ public:
     static float padYForFeedback(float fb) { return juce::jlimit(0.0f, 1.0f, fb / 1.05f); }
     bool padSynced() const { return pSync->load() > 0.5f; }
     juce::AudioBuffer<float> wetScratch;   // post-EQ wet signal for the Field analyser
+    // The whole echo loop runs at 2x the host rate (tape stage adds another 2x = 4x)
+    juce::AudioBuffer<float> osBuf, osWet;
+    zw::Oversampler2x osUp[2], osDown[2], osWetDown[2];
     zwui::PresetBank bank { apvts, "Drift" };
     double currentSampleRate = 48000.0;
 

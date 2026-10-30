@@ -92,6 +92,7 @@ namespace Presets
         setParam(apvts, ParamIDs::tilt,       0.0f);
         setParam(apvts, ParamIDs::color,      juce::String(p.name) == "Deep Dub Chamber" ? -0.45f : (juce::String(p.name) == "Alien Transmission" ? 0.6f : 0.0f));
 
+        setParam(apvts, zwui::FreezeQuantizer::paramId, 0.0f);
         // Factory motion (targets 1-based: Time=1 Feedback Wobble Age Space Size Decay Width Spread Mix WobbleRate LowCut HighCut Tilt Color=15)
         const juce::String n(p.name);
         if (n == "Nebula Wash")          { zwui::setLfo(apvts, 1, 6, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 2, 8, 0.25f);  zwui::setModSlot(apvts, 1, 2, 15, -0.20f); }
