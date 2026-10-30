@@ -33,6 +33,9 @@ private:
     zwui::GalaxyScope scope;
     zwui::ModPanel modPanel { processor.apvts, processor.mod, lnf };
     zwui::PresetBar presetBar;
+    zwui::PerformPad pad { processor.apvts, processor.pad, lnf, "TIME", "FEEDBACK" };
+    juce::ComboBox glideBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> glideAttach;
 
     juce::ToggleButton syncButton { "SYNC" }, pingPongButton { "PING-PONG" }, freezeButton { "FREEZE" },
                        wobbleSyncButton { "SYNC" }, powerButton;

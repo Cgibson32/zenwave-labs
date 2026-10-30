@@ -34,7 +34,11 @@ namespace DriftManual
               { "WOBBLE RATE", "Speed of the slow wow (0.05-4 Hz) when wobble sync is off.", "wobblerate" },
               { "OUTPUT", "Output trim, -24 to +12 dB. Use it to match levels when A/B-ing.", "output" } } });
 
-        v.push_back(zwui::fieldSection());
+        {
+            auto f = zwui::fieldSection();
+            f.entries.insert(f.entries.begin(), { "PERFORM PAD", "The throw surface. Drag: across = delay time (snapped to divisions when SYNC is on), up = feedback (the pink zone at the top self-oscillates). Let go and the sound glides back to your knob settings over the GLIDE division - a perfect, repeatable throw every time. Your DAW records it as Pad X / Pad Y / Pad Hold automation, and you can map a controller pad to Pad Hold." });
+            v.push_back(f);
+        }
         v.push_back(zwui::motionSection());
         v.push_back(zwui::presetSection());
         v.push_back({ "RECIPES", "",

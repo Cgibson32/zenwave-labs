@@ -158,6 +158,30 @@ int main()
         for (int i = 1; i <= 4; ++i) set("mod" + juce::String(i) + "src", 0.0f);
     }
 
+    // 6) Perform pad (if present): hardest throw - max time, self-oscillating feedback - then release and glide home
+    {
+        juce::RangedAudioParameter* hold = nullptr;
+        for (auto* pp : proc->getParameters()) if (auto* r = dynamic_cast<juce::RangedAudioParameter*>(pp)) if (r->paramID == "padhold") hold = r;
+        if (hold)
+        {
+            auto set = [&](const juce::String& id, float v) { for (auto* pp : proc->getParameters()) if (auto* r = dynamic_cast<juce::RangedAudioParameter*>(pp)) if (r->paramID == id) r->setValueNotifyingHost(v); };
+            proc->setCurrentProgram(0);
+            Stats total;
+            for (int k = 0; k < 3; ++k)
+            {
+                set("padx", k == 0 ? 1.0f : (k == 1 ? 0.0f : 0.5f)); set("pady", 1.0f); set("padhold", 1.0f);
+                auto a = run(*proc, int(sr * 1.5 / block), t, sr, b, mb, last);
+                set("padhold", 0.0f);
+                auto c = run(*proc, int(sr * 2.5 / block), t, sr, b, mb, last);
+                total.finite &= a.finite && c.finite; total.peak = std::max({ total.peak, a.peak, c.peak }); total.clicks += a.clicks + c.clicks;
+            }
+            QA_CHECK(total.finite, "perform pad produced NaN/Inf");
+            QA_CHECK(total.peak < 4.1f, "perform pad peak %.2f", total.peak);
+            QA_CHECK(total.clicks <= 2, "perform pad throws had %d clicks", total.clicks);
+            std::printf("  pad    3 throws + glide home       peak %5.2f  clicks %d\n", total.peak, total.clicks);
+        }
+    }
+
     std::printf("%s (%d failure%s)\n", failures ? "QA FAILED" : "QA PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

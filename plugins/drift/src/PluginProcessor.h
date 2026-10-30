@@ -4,6 +4,7 @@
 #include <zenwave_ui/ProcessorHelpers.h>
 #include <zenwave_ui/Modulation.h>
 #include <zenwave_ui/PresetBank.h>
+#include <zenwave_ui/PerformPad.h>
 #include "Presets.h"
 
 namespace ParamIDs
@@ -81,6 +82,13 @@ public:
     zwui::SpectrumTap spectrum, spectrumIn;
     zwui::StereoTap stereo;
     zwui::ModMatrix mod;
+    zwui::PadEngine pad;
+    // Perform-pad mapping (shared with the editor so "home" draws in the right place)
+    float padTimeMs(float x) const;
+    float padXForTime(float ms) const;
+    static float padFeedback(float y) { return y * 1.05f; }
+    static float padYForFeedback(float fb) { return juce::jlimit(0.0f, 1.0f, fb / 1.05f); }
+    bool padSynced() const { return pSync->load() > 0.5f; }
     juce::AudioBuffer<float> wetScratch;   // post-EQ wet signal for the Field analyser
     zwui::PresetBank bank { apvts, "Drift" };
     double currentSampleRate = 48000.0;

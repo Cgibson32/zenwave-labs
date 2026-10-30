@@ -42,6 +42,10 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
 
     addAndMakeVisible(presetBar);
     addAndMakeVisible(modPanel);
+    addAndMakeVisible(pad);
+    addAndMakeVisible(glideBox); glideBox.addItemList(zwui::PadIDs::glideNames(), 1);
+    glideBox.setTooltip("Glide: how long the pad takes to return home after you let go (synced)");
+    glideAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, zwui::PadIDs::glide, glideBox);
     allKnobs = { &time, &feedback, &wobble, &age, &space, &mix, &size, &decay, &width, &spread, &output, &wobbleRate, &color, &lowCut, &highCut, &tilt };
     installLocks();
 
@@ -115,6 +119,9 @@ void DriftAudioProcessorEditor::timerCallback()
     scope.update(processor.stereo);
     presetBar.sync();
     modPanel.tick();
+    pad.setHome(processor.padXForTime(float(time.slider.getValue())), processor.padYForFeedback(float(feedback.slider.getValue())));
+    pad.setColumns(syncButton.getToggleState() ? 9 : 0);
+    pad.tick();
     syncModRings();
     const bool sync = syncButton.getToggleState();
     divisionBox.setEnabled(sync); divisionBox.setAlpha(sync ? 1.0f : 0.4f);
@@ -142,7 +149,7 @@ void DriftAudioProcessorEditor::paint(juce::Graphics& g)
     scope.draw(g, juce::Rectangle<float>(40 * s, 548 * s, 128 * s, 128 * s), lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::EqCurve eq { lowCut.slider.getValue() > 0 ? float(lowCut.slider.getValue()) : 20.0f, float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
-    zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
+    zwui::drawEqField(g, juce::Rectangle<float>(320 * s, 552 * s, 278 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
@@ -176,9 +183,11 @@ void DriftAudioProcessorEditor::resized()
     for (auto* k : smalls) { k->layout(x, S(392), S(100), S(110), S(14)); x += S(115); }
 
     // Tone: field display on the left, cuts + tilt on the right
+    pad.setBounds(S(184), S(550), S(122), S(106));
+    glideBox.setBounds(S(184), S(660), S(122), S(18));
     zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };
-    x = S(566);
-    for (auto* k : tone) { k->layout(x, S(572), S(90), S(84), S(12)); x += S(98); }
-    lowSlopeBox.setBounds(S(574), S(662), S(74), S(18));
-    highSlopeBox.setBounds(S(672), S(662), S(74), S(18));
+    x = S(610);
+    for (auto* k : tone) { k->layout(x, S(572), S(80), S(84), S(12)); x += S(84); }
+    lowSlopeBox.setBounds(S(614), S(662), S(72), S(18));
+    highSlopeBox.setBounds(S(698), S(662), S(72), S(18));
 }

@@ -36,6 +36,8 @@ DriftAudioProcessor::DriftAudioProcessor()
     pTilt = apvts.getRawParameterValue(ParamIDs::tilt);
     pColor = apvts.getRawParameterValue(ParamIDs::color);
     mod.attach(apvts, driftModTargets());
+    pad.attach(apvts);
+    bank.setAlwaysLocked({ zwui::PadIDs::x, zwui::PadIDs::y, zwui::PadIDs::hold, zwui::PadIDs::glide });
     bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze });
     bank.setSafeRange(ParamIDs::feedback, 0.0f, 0.82f);
     bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
@@ -106,6 +108,7 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::color, 1 }, "Color", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return v < -0.01f ? "Dark " + juce::String(juce::roundToInt(-v * 100)) + " %" : v > 0.01f ? "Thin " + juce::String(juce::roundToInt(v * 100)) + " %" : juce::String("Off"); })));
     zwui::addModParams(params, driftModTargets());
+    zwui::addPadParams(params);
     return { params.begin(), params.end() };
 }
 
@@ -114,6 +117,7 @@ void DriftAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
     mod.prepare(sampleRate);
+    pad.prepare(sampleRate);
     wetScratch.setSize(2, samplesPerBlock);
     monoScratch.setSize(1, samplesPerBlock);
     power.prepare(sampleRate, samplesPerBlock, 2);
@@ -134,12 +138,33 @@ float DriftAudioProcessor::syncedTimeMs() const
     return float(zwui::divisionSeconds(int(pDivision->load()), hostBpm) * 1000.0);
 }
 
+float DriftAudioProcessor::padTimeMs(float x) const
+{
+    if (padSynced()) return float(zwui::divisionSeconds(juce::roundToInt(x * 9.0f), hostBpm) * 1000.0);   // 1/32 .. 1/2, snapped
+    return 40.0f * std::pow(1500.0f / 40.0f, x);
+}
+float DriftAudioProcessor::padXForTime(float ms) const
+{
+    if (padSynced()) return juce::jlimit(0.0f, 1.0f, float(juce::jlimit(0, 9, int(pDivision->load()))) / 9.0f);
+    return juce::jlimit(0.0f, 1.0f, std::log(ms / 40.0f) / std::log(1500.0f / 40.0f));
+}
+
 void DriftAudioProcessor::updateEngineParams()
 {
     zw::DriftParams p;
     const auto M = [this](int t) { return mod.value(t); };
-    p.timeMs     = pSync->load() > 0.5f ? syncedTimeMs() * std::pow(2.0f, mod.offsetNorm(ModT::Time) * 2.0f) : M(ModT::Time);   // synced: ±2 octaves
-    p.feedback   = M(ModT::Feedback);
+    float timeMs = pSync->load() > 0.5f ? syncedTimeMs() * std::pow(2.0f, mod.offsetNorm(ModT::Time) * 2.0f) : M(ModT::Time);   // synced: +/-2 octaves
+    float fb     = M(ModT::Feedback);
+    // Perform pad override, eased in/out by PadEngine (time interpolates in the log domain)
+    const float pa = pad.eased.load();
+    if (pa > 0.0001f)
+    {
+        timeMs = std::exp(juce::jmap(pa, std::log(timeMs), std::log(padTimeMs(pad.x()))));
+        fb     = juce::jmap(pa, fb, padFeedback(pad.y()));
+    }
+    pad.effX.store(padXForTime(timeMs)); pad.effY.store(padYForFeedback(fb));
+    p.timeMs     = timeMs;
+    p.feedback   = fb;
     p.wowFlutter = M(ModT::Wobble);
     p.age        = M(ModT::Age);
     p.space      = M(ModT::Space);
@@ -186,6 +211,7 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     {
         const int len = juce::jmin(kSub, n - start);
         mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        pad.process(len, hostBpm);
         updateEngineParams();
         if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));
         if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);
