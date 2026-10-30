@@ -87,6 +87,28 @@ int main()
         CHECK(peak(ZL) < 1.0e-3f, "Drift is near-silent with silent input (hiss floor only)");
     }
 
+
+    // --- UmbraEngine: bounded at extremes, sub band passes through untouched -------
+    {
+        zw::UmbraEngine u; u.prepare(sr, block);
+        zw::UmbraParams p; p.decay = 1.0f; p.size = 1.0f; p.dark = 1.0f; p.density = 1.0f; p.motion = 1.0f; p.mix = 1.0f; p.width = 1.5f;
+        u.setParams(p);
+        std::vector<float> L(size_t(sr * 6), 0.0f), R(L.size(), 0.0f);
+        for (size_t i = 0; i < size_t(sr); ++i) L[i] = R[i] = 0.9f * std::sin(2 * zw::kPi * 1000.0f * i / float(sr));
+        for (size_t i = 0; i < L.size(); i += block) u.process(L.data() + i, R.data() + i, int(std::min<size_t>(block, L.size() - i)));
+        CHECK(finiteAndBounded(L, 4.0f) && finiteAndBounded(R, 4.0f), "Umbra at max decay/size/dark/density/motion stays bounded");
+        CHECK(rms(L, size_t(sr * 1.2)) > 1.0e-4f, "Umbra produces a tail");
+
+        // 35 Hz sine with gravity crossover at ~170 Hz and mix 100%: output should still be ~the dry sub
+        zw::UmbraEngine g; g.prepare(sr, block);
+        zw::UmbraParams q; q.mix = 1.0f; q.gravity = 0.5f; g.setParams(q);
+        std::vector<float> SL(size_t(sr * 2)), SR(SL.size());
+        for (size_t i = 0; i < SL.size(); ++i) SL[i] = SR[i] = 0.5f * std::sin(2 * zw::kPi * 35.0f * i / float(sr));
+        for (size_t i = 0; i < SL.size(); i += block) g.process(SL.data() + i, SR.data() + i, int(std::min<size_t>(block, SL.size() - i)));
+        const float subRms = rms(SL, size_t(sr));
+        CHECK(subRms > 0.30f && subRms < 0.40f, "Umbra Gravity keeps a 35 Hz sub essentially dry (RMS ~0.35)");
+    }
+
     // --- DelayLine: fractional read is accurate for a ramp -------------------------
     {
         zw::DelayLine dl; dl.prepare(sr, 0.1f);

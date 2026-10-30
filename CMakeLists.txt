@@ -38,7 +38,9 @@ set(ZENWAVE_MANUFACTURER_CODE "Zwav")   # exactly 4 chars, first uppercase
 set(ZENWAVE_BUNDLE_PREFIX     "com.zenwavelabs")
 
 add_subdirectory(libs/zenwave_dsp)
+add_subdirectory(libs/zenwave_ui)
 add_subdirectory(plugins/drift)
+add_subdirectory(plugins/umbra)
 
 if(ZENWAVE_BUILD_TESTS)
   enable_testing()

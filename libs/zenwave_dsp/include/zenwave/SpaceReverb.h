@@ -57,7 +57,13 @@ public:
     // decay 0..1 → feedback gain; 1.0 is near-infinite (use with Freeze)
     void setDecay(float d) noexcept { feedback = 0.3f + clampf(d, 0.0f, 1.0f) * 0.69f; }
     void setDamping(float hz) noexcept { for (auto& f : damp) f.setLowpass(hz); }
+    void setLoopHighpass(float hz) noexcept { loopHP.setHighpass(hz); }
+    void setDiffusion(float g) noexcept { diffusion = clampf(g, 0.0f, 0.85f); }
     void setModDepth(float d) noexcept { modDepth = clampf(d, 0.0f, 1.0f) * 6.0f; }  // samples
+    void setModRate(float mult) noexcept
+    {
+        for (int i = 0; i < kLines; ++i) lfo[i].setRate((0.07f + 0.013f * static_cast<float>(i)) * clampf(mult, 0.1f, 8.0f));
+    }
     void setFreeze(bool f) noexcept { freeze = f; }
 
     void process(float inL, float inR, float& outL, float& outR) noexcept
@@ -65,7 +71,7 @@ public:
         // Mono-ish input with a little width, through 4 series allpasses
         float x = 0.5f * (inL + inR);
         x = loopHP.process(x);
-        for (int i = 0; i < 4; ++i) x = allpass(diffusers[i], x, kDiffMs[i], 0.6f);
+        for (int i = 0; i < 4; ++i) x = allpass(diffusers[i], x, kDiffMs[i], diffusion);
 
         // Read all lines (modulated), damp, collect
         std::array<float, kLines> v;
@@ -110,7 +116,7 @@ private:
     static constexpr float kInputGain[kLines] = { 1.0f, -1.0f, 1.0f, -1.0f, 0.7f, -0.7f, 0.7f, -0.7f };
 
     double sampleRate = 44100.0;
-    float size = 0.6f, feedback = 0.7f, modDepth = 2.0f;
+    float size = 0.6f, feedback = 0.7f, modDepth = 2.0f, diffusion = 0.6f;
     bool  freeze = false;
     std::array<DelayLine, kLines> lines;
     std::array<DelayLine, 4>      diffusers;

@@ -31,10 +31,10 @@ jobs:
         include:
           - name: macOS (VST3 + AU, universal)
             os: macos-14
-            artifact: Drift-macOS
+            artifact: ZenWave-macOS
           - name: Windows (VST3)
             os: windows-latest
-            artifact: Drift-Windows
+            artifact: ZenWave-Windows
     steps:
       - uses: actions/checkout@v4
 
@@ -42,11 +42,11 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DZENWAVE_BUILD_TESTS=OFF
 
       - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_VST3 Drift_Standalone --parallel 4
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_VST3 Drift_Standalone Umbra_VST3 Umbra_Standalone --parallel 4
 
       - name: Build AU (macOS only)
         if: runner.os == 'macOS'
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_AU --parallel 4
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_AU Umbra_AU --parallel 4
 
       # --- Code signing & notarization (macOS). Secrets are added once in the repo settings:
       #   APPLE_CERT_P12 (base64), APPLE_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
@@ -58,14 +58,19 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: bash tools/mac_sign_notarize.sh build/plugins/drift/Drift_artefacts/Release
+        run: |
+          bash tools/mac_sign_notarize.sh build/plugins/drift/Drift_artefacts/Release
+          bash tools/mac_sign_notarize.sh build/plugins/umbra/Umbra_artefacts/Release
 
       - name: Collect artifacts
         shell: bash
         run: |
           mkdir -p out
-          cp -R build/plugins/drift/Drift_artefacts/Release/VST3/*.vst3 out/ || cp -R build/plugins/drift/Drift_artefacts/VST3/*.vst3 out/
-          if [ "$RUNNER_OS" == "macOS" ]; then cp -R build/plugins/drift/Drift_artefacts/Release/AU/*.component out/; fi
+          for plug in drift umbra; do
+            P=$(echo $plug | sed 's/./\U&/')
+            cp -R build/plugins/$plug/${P}_artefacts/Release/VST3/*.vst3 out/ 2>/dev/null || cp -R build/plugins/$plug/${P}_artefacts/VST3/*.vst3 out/
+            if [ "$RUNNER_OS" == "macOS" ]; then cp -R build/plugins/$plug/${P}_artefacts/Release/AU/*.component out/; fi
+          done
           ls -la out
 
       - uses: actions/upload-artifact@v4
