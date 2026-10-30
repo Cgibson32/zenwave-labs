@@ -45,6 +45,22 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     allKnobs = { &time, &feedback, &wobble, &age, &space, &mix, &size, &decay, &width, &spread, &output, &wobbleRate, &color, &lowCut, &highCut, &tilt };
     installLocks();
 
+    // Built-in manual + tooltips
+    addAndMakeVisible(helpButton);
+    helpButton.getProperties().set("round", true);
+    helpButton.setTooltip("Manual: what every knob does, quick start and recipes");
+    helpButton.onClick = [this] { manual.show(); };
+    addChildComponent(manual);
+    manual.set("DRIFT", "Lo-fi space echo for bass music.", DriftManual::sections());
+    zwui::applyTooltips(DriftManual::sections(), allKnobs);
+    powerButton.setTooltip("Power: clean 12 ms crossfade bypass");
+    syncButton.setTooltip("Sync the delay time to host tempo (uses the division next to it)");
+    divisionBox.setTooltip("Delay division when SYNC is on. Dotted (.) and triplet (T) values included.");
+    pingPongButton.setTooltip("Ping-pong: repeats alternate left / right");
+    wobbleSyncButton.setTooltip("Lock the slow wow to tempo so the pitch dip lands on the beat");
+    wobbleDivBox.setTooltip("Wobble division: one wow cycle per division");
+    freezeButton.setTooltip("Freeze: hold the current tail forever. Automate it for drops and transitions.");
+
     setResizable(true, true);
     setResizeLimits(704, 712, 1408, 1424);
     getConstrainer()->setFixedAspectRatio(880.0 / 890.0);
@@ -136,6 +152,8 @@ void DriftAudioProcessorEditor::resized()
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
     presetBar.setBounds(0, 0, getWidth(), S(60));
+    helpButton.setBounds(S(318), S(24), S(28), S(28));
+    manual.setBounds(getLocalBounds());
     presetBar.layoutScaled(s, 424);
     powerButton.setBounds(S(824), S(20), S(34), S(34));
     freezeButton.setBounds(S(752), S(300), S(84), S(26));

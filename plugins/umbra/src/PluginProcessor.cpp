@@ -83,6 +83,7 @@ void UmbraAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
     mod.prepare(sampleRate);
+    wetScratch.setSize(2, samplesPerBlock);
     power.prepare(sampleRate, samplesPerBlock, 2);
     meterIn.prepare(sampleRate); meterOut.prepare(sampleRate);
     updateEngineParams();
@@ -134,14 +135,17 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         const int len = juce::jmin(kSub, n - start);
         mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
         updateEngineParams();
+        if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));
         if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);
         else if (numOut == 1) engine.processMono(buffer.getWritePointer(0, start), len);
+        engine.setWetTap(nullptr, nullptr);
         if (playing) ppq += len / currentSampleRate * hostBpm / 60.0;
     }
     for (int ch = 2; ch < numOut; ++ch) buffer.clear(ch, 0, n);
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
-    spectrum.push(buffer);
+    if (wetScratch.getNumSamples() >= n && numOut >= 2) { juce::AudioBuffer<float> wet(wetScratch.getArrayOfWritePointers(), 2, n); spectrum.push(wet); }
+    else spectrum.push(buffer);
     stereo.push(buffer);
 }
 

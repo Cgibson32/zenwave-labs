@@ -3,6 +3,7 @@
 #include <zenwave_ui/ZenWaveUI.h>
 #include <zenwave_ui/ModPanel.h>
 #include <zenwave_ui/PresetBar.h>
+#include "Manual.h"
 #include "PluginProcessor.h"
 
 class DriftAudioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -40,6 +41,9 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionAttach, wobbleDivAttach;
     double lastTick = 0.0;
     std::vector<zwui::Knob*> allKnobs;
+    juce::TextButton helpButton { "?" };
+    juce::TooltipWindow tooltips { this, 650 };
+    zwui::ManualOverlay manual { lnf };   // last: sits on top of everything
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DriftAudioProcessorEditor)
 };

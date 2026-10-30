@@ -81,6 +81,7 @@ public:
     zwui::SpectrumTap spectrum, spectrumIn;
     zwui::StereoTap stereo;
     zwui::ModMatrix mod;
+    juce::AudioBuffer<float> wetScratch;   // post-EQ wet signal for the Field analyser
     zwui::PresetBank bank { apvts, "Drift" };
     double currentSampleRate = 48000.0;
 

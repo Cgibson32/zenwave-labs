@@ -26,6 +26,10 @@ int main(int argc, char** argv)
     std::unique_ptr<juce::AudioProcessorEditor> ed(proc->createEditor());
     ed->setVisible(true);
     for (int i = 0; i < 30; ++i) { juce::MessageManager::getInstance()->runDispatchLoopUntil(10); }
+    if (argc > 3)   // "manual": open the built-in manual before the shot
+        for (int i = 0; i < ed->getNumChildComponents(); ++i)
+            if (auto* tb = dynamic_cast<juce::TextButton*>(ed->getChildComponent(i))) if (tb->getButtonText() == "?") { tb->triggerClick(); break; }
+    for (int i = 0; i < 10; ++i) { juce::MessageManager::getInstance()->runDispatchLoopUntil(10); }
     const float scale = 2.0f;
     auto img = ed->createComponentSnapshot(ed->getLocalBounds(), true, scale);
     juce::File out(argc > 1 ? argv[1] : "snapshot.png");

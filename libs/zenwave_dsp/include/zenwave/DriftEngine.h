@@ -211,6 +211,7 @@ public:
             const float b = std::sin(mix * kPi * 0.5f);
             L[i] = (dryL * a + wetL * b) * out;
             R[i] = (dryR * a + wetR * b) * out;
+            if (wetTapL) { wetTapL[i] = wetL * b * out; wetTapR[i] = wetR * b * out; }
         }
     }
 
@@ -256,6 +257,11 @@ private:
     CutFilter lowCut[2], highCut[2];
     TiltEQ tiltEq[2];
     Smoother smTime, smFeedback, smMix, smSpace, smOut, smWidth, smFreeze;
+public:
+    // Optional: receives the post-EQ, post-mix wet signal (for analysers). Pointers valid for one process() call.
+    void setWetTap(float* l, float* r) noexcept { wetTapL = l; wetTapR = r; }
+private:
+    float* wetTapL = nullptr; float* wetTapR = nullptr;
     float scratchR[8192] {};
 };
 

@@ -43,6 +43,19 @@ UmbraAudioProcessorEditor::UmbraAudioProcessorEditor(UmbraAudioProcessor& p)
     allKnobs = { &preDelay, &size, &decay, &dark, &mix, &density, &motion, &gravity, &early, &duck, &width, &output, &motionRate, &bloom, &lowCut, &highCut, &tilt };
     installLocks();
 
+    // Built-in manual + tooltips
+    addAndMakeVisible(helpButton);
+    helpButton.getProperties().set("round", true);
+    helpButton.setTooltip("Manual: what every knob does, quick start and recipes");
+    helpButton.onClick = [this] { manual.show(); };
+    addChildComponent(manual);
+    manual.set("UMBRA", "Dark reverb for bass music.", UmbraManual::sections());
+    zwui::applyTooltips(UmbraManual::sections(), allKnobs);
+    powerButton.setTooltip("Power: clean 12 ms crossfade bypass");
+    motionSyncButton.setTooltip("Lock the internal tail modulation to tempo: one slow swirl per division");
+    motionDivBox.setTooltip("Motion division when SYNC is on");
+    freezeButton.setTooltip("Freeze: hold the current tail forever. Automate it for drops and transitions.");
+
     setResizable(true, true);
     setResizeLimits(704, 712, 1408, 1424);
     getConstrainer()->setFixedAspectRatio(880.0 / 890.0);
@@ -130,6 +143,8 @@ void UmbraAudioProcessorEditor::resized()
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
     presetBar.setBounds(0, 0, getWidth(), S(60));
+    helpButton.setBounds(S(318), S(24), S(28), S(28));
+    manual.setBounds(getLocalBounds());
     presetBar.layoutScaled(s, 424);
     powerButton.setBounds(S(824), S(20), S(34), S(34));
     freezeButton.setBounds(S(752), S(300), S(84), S(26));

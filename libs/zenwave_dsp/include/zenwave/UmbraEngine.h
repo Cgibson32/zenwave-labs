@@ -175,6 +175,7 @@ public:
             const float a = std::cos(mix * kPi * 0.5f), b = std::sin(mix * kPi * 0.5f);
             L[i] = ((hiL * a + wetL * b) + lowL) * out;
             R[i] = ((hiR * a + wetR * b) + lowR) * out;
+            if (wetTapL) { wetTapL[i] = wetL * b * out; wetTapR[i] = wetR * b * out; }
         }
     }
 
@@ -209,6 +210,10 @@ private:
     CutFilter lowCut[2], highCut[2];
     TiltEQ tiltEq[2];
     Smoother smMix, smOut, smWidth, smPre, smEarly;
+public:
+    void setWetTap(float* l, float* r) noexcept { wetTapL = l; wetTapR = r; }
+private:
+    float* wetTapL = nullptr; float* wetTapR = nullptr;
     float scratch[8192] {};
 };
 

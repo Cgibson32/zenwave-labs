@@ -1,5 +1,5 @@
 #pragma once
-// Header preset strip: ‹ [preset browser] › SAVE  A|B  WARP
+// Header preset strip: < [preset browser] > SAVE  A|B  WARP
 // Factory presets come from the plugin's Presets table; user presets from PresetBank.
 
 #include "ZenWaveUI.h"

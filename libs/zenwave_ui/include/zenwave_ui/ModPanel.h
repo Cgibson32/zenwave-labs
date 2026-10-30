@@ -38,6 +38,22 @@ public:
             S.amt.init(*this, apvts, ModIDs::slotAmt(i).toRawUTF8(), "", false, false);
             S.amt.label.setVisible(false);
         }
+        for (int i = 0; i < 2; ++i)
+        {
+            lfo[i].shape.setTooltip("LFO shape: Sine, Triangle, Saw Up, Saw Down, Square, Random (stepped), Drift (smooth random)");
+            lfo[i].sync.setTooltip("Sync: one LFO cycle per division, phase-locked to the host bar");
+            lfo[i].div.setTooltip("LFO division when SYNC is on");
+            lfo[i].rate.slider.setTooltip("LFO rate in Hz when SYNC is off (0.02-20 Hz)");
+        }
+        attack.slider.setTooltip("Envelope attack: how fast the follower rises on a hit");
+        release.slider.setTooltip("Envelope release: how fast it falls after the hit");
+        sens.slider.setTooltip("Envelope sensitivity: how hard a normal-level signal pushes the follower (watch the bar)");
+        for (auto& S : slot)
+        {
+            S.src.setTooltip("Modulation source for this slot");
+            S.dst.setTooltip("Which knob this slot moves");
+            S.amt.slider.setTooltip("Amount: how far the source moves the target. Negative = inverted. LFOs swing both ways around the knob; ENV pushes one way.");
+        }
         setInterceptsMouseClicks(false, true);
     }
 

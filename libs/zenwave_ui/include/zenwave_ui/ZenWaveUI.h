@@ -287,9 +287,36 @@ public:
         }
     }
 
+    juce::Rectangle<int> getTooltipBounds(const juce::String& tip, juce::Point<int> pos, juce::Rectangle<int> parent) override
+    {
+        juce::AttributedString as; as.append(tip, juce::Font(juce::FontOptions(12.0f)), Palette::text);
+        juce::TextLayout tl; tl.createLayout(as, 300.0f);
+        const int w = int(tl.getWidth()) + 24, h = int(tl.getHeight()) + 16;
+        return juce::Rectangle<int>(pos.x > parent.getCentreX() ? pos.x - w - 6 : pos.x + 14, pos.y > parent.getCentreY() ? pos.y - h - 8 : pos.y + 20, w, h).constrainedWithin(parent);
+    }
+    void drawTooltip(juce::Graphics& g, const juce::String& tip, int w, int h) override
+    {
+        auto r = juce::Rectangle<float>(0, 0, float(w), float(h)).reduced(1.0f);
+        g.setColour(Palette::bg2.withAlpha(0.97f)); g.fillRoundedRectangle(r, 9.0f);
+        g.setColour(accent.withAlpha(0.8f)); g.drawRoundedRectangle(r, 9.0f, 1.0f);
+        juce::AttributedString as; as.append(tip, juce::Font(juce::FontOptions(12.0f)), Palette::text);
+        juce::TextLayout tl; tl.createLayout(as, float(w) - 24.0f);
+        tl.draw(g, r.reduced(11.0f, 7.0f));
+    }
+
     void drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool hover, bool down) override
     {
         auto r = b.getLocalBounds().toFloat().reduced(1.0f);
+        if (bool(b.getProperties()["round"]))
+        {
+            r = r.withSizeKeepingCentre(juce::jmin(r.getWidth(), r.getHeight()), juce::jmin(r.getWidth(), r.getHeight()));
+            g.setColour(juce::Colours::black.withAlpha(0.45f)); g.fillEllipse(r.translated(0, 2.0f));
+            g.setGradientFill(juce::ColourGradient(Palette::knobLight, r.getX(), r.getY(), Palette::card, r.getX(), r.getBottom(), false));
+            g.fillEllipse(r);
+            if (hover) { for (int i = 3; i >= 1; --i) { g.setColour(accent2.withAlpha(0.07f)); g.drawEllipse(r.expanded(i * 1.6f), 1.0f); } }
+            g.setColour(hover || down ? accent2 : accent.withAlpha(0.7f)); g.drawEllipse(r, 1.2f);
+            return;
+        }
         g.setColour(juce::Colours::black.withAlpha(0.45f)); g.fillRoundedRectangle(r.translated(0, 2.0f), 8.0f);
         if (down) g.setGradientFill(juce::ColourGradient(accent, r.getX(), r.getY(), accent2.darker(0.2f), r.getRight(), r.getBottom(), false));
         else g.setGradientFill(juce::ColourGradient(Palette::knobLight, r.getX(), r.getY(), Palette::card, r.getX(), r.getBottom(), false));
@@ -727,6 +754,10 @@ inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const Spect
         g.setColour(accent2.withAlpha(0.4f)); g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
         g.setColour(juce::Colours::white); g.fillEllipse(x - 3.0f, y - 3.0f, 6.0f, 6.0f);
     }
+    // legend
+    g.setFont(juce::Font(juce::FontOptions(8.0f, juce::Font::bold)));
+    g.setColour(accent2); g.drawText("WET", int(r.getX()) + 8, int(top) + 2, 30, 10, juce::Justification::left);
+    if (dry) { g.setColour(juce::Colours::white.withAlpha(0.45f)); g.drawText("IN", int(r.getX()) + 34, int(top) + 2, 20, 10, juce::Justification::left); }
     g.setColour(accent.withAlpha(0.5f));
     g.drawRoundedRectangle(r, 10.0f, 1.0f);
 }
