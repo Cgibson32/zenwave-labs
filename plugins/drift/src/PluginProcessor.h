@@ -1,0 +1,70 @@
+#pragma once
+#include <JuceHeader.h>
+#include <zenwave/zenwave.h>
+#include "Presets.h"
+
+namespace ParamIDs
+{
+    inline constexpr auto time       = "time";
+    inline constexpr auto sync       = "sync";
+    inline constexpr auto division   = "division";
+    inline constexpr auto feedback   = "feedback";
+    inline constexpr auto wowFlutter = "wowflutter";
+    inline constexpr auto age        = "age";
+    inline constexpr auto space      = "space";
+    inline constexpr auto size       = "size";
+    inline constexpr auto decay      = "decay";
+    inline constexpr auto width      = "width";
+    inline constexpr auto spread     = "spread";
+    inline constexpr auto pingPong   = "pingpong";
+    inline constexpr auto freeze     = "freeze";
+    inline constexpr auto mix        = "mix";
+    inline constexpr auto output     = "output";
+}
+
+class DriftAudioProcessor : public juce::AudioProcessor
+{
+public:
+    DriftAudioProcessor();
+    ~DriftAudioProcessor() override = default;
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 20.0; }
+
+    int getNumPrograms() override { return Presets::count(); }
+    int getCurrentProgram() override { return currentPreset; }
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override { return Presets::name(index); }
+    void changeProgramName(int, const juce::String&) override {}
+
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
+
+    juce::AudioProcessorValueTreeState apvts;
+
+private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
+    void updateEngineParams();
+    float syncedTimeMs() const;
+
+    zw::DriftEngine engine;
+    juce::AudioBuffer<float> monoScratch;
+    int currentPreset = 0;
+    double hostBpm = 120.0;
+
+    std::atomic<float>* pTime{}, * pSync{}, * pDivision{}, * pFeedback{}, * pWow{}, * pAge{}, * pSpace{},
+                      * pSize{}, * pDecay{}, * pWidth{}, * pSpread{}, * pPingPong{}, * pFreeze{}, * pMix{}, * pOutput{};
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DriftAudioProcessor)
+};

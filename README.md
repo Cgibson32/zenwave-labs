@@ -1,0 +1,51 @@
+# ZenWave Labs — plugins monorepo
+
+Premium audio plugins for bass and electronic producers. Space-themed, flat-priced, built on JUCE 8 with a shared, JUCE-free DSP library.
+
+```
+zenwave-labs/
+├── libs/zenwave_dsp/      Header-only DSP: delay, filters, saturation, SpaceReverb, DriftEngine
+├── plugins/drift/         Drift — lo-fi space echo (free). First product.
+├── tests/                 DSP unit tests (no JUCE required)
+├── docs/                  Product specs
+├── tools/                 Signing / notarization scripts
+└── .github/workflows/     CI: Linux tests, macOS (VST3+AU, universal) and Windows (VST3) builds
+```
+
+## Build
+
+Requirements: CMake 3.22+, a C++20 compiler. JUCE is fetched automatically on first configure.
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target Drift_VST3 Drift_Standalone --parallel
+# macOS additionally:
+cmake --build build --target Drift_AU --parallel
+```
+
+Built plugins land in `build/plugins/drift/Drift_artefacts/Release/`. Set `-DZENWAVE_COPY_PLUGINS=ON` to copy them into your user plugin folders after each build.
+
+Linux needs the usual JUCE dev packages (`libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libcurl4-openssl-dev libgtk-3-dev libwebkit2gtk-4.1-dev`).
+
+## Test the DSP without a DAW
+
+```bash
+g++ -std=c++20 -O2 -Ilibs/zenwave_dsp/include tests/dsp_tests.cpp -o dsp_tests && ./dsp_tests
+```
+
+## Releasing
+
+Push a tag like `v0.1.0`. CI builds macOS and Windows, signs and notarizes the Mac bundles when the Apple secrets are configured, and attaches zips to the GitHub release.
+
+Secrets to add once (Settings → Secrets → Actions): `APPLE_CERT_P12` (base64 of the Developer ID .p12), `APPLE_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`. Windows signing is added the same way when the certificate exists.
+
+## Product roadmap
+
+Drift (free) → Umbra (dark reverb, $49) → Halo (shimmer reverb, $49) → Core (multiband saturator, $59) → Nebula (pad synth, $99) → Horizon (AI mastering, $129) → Siren → Xeno → Stellar Strings. Shared code lives in `libs/zenwave_dsp`; Umbra and Halo start from `SpaceReverb`.
+
+## House rules
+
+- One screen per plugin. Macro row for speed, deep row for control.
+- Every continuous parameter is smoothed. Every extreme setting is tested for stability.
+- Sub-safe by default: nothing below 60–90 Hz goes into feedback or reverb loops.
+- Flat prices. No sales. New releases are the only scarcity.

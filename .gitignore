@@ -1,0 +1,6 @@
+build/
+out/
+*.p12
+.DS_Store
+compile_commands.json
+.cache/
