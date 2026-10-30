@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include <zenwave_ui/ZenWaveUI.h>
+#include <zenwave_ui/ModPanel.h>
+#include <zenwave_ui/PresetBar.h>
 #include "PluginProcessor.h"
 
 class DriftAudioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -14,7 +16,8 @@ public:
 
 private:
     void timerCallback() override;
-    void refreshPresetBox();
+    void installLocks();
+    void syncModRings();
 
     DriftAudioProcessor& processor;
     zwui::LookAndFeel lnf { zwui::Palette::violet, zwui::Palette::violetHi, zwui::Palette::cyan };
@@ -25,16 +28,18 @@ private:
     zwui::Knob lowCut, highCut, tilt;                              // tone
     juce::ComboBox lowSlopeBox, highSlopeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;
-    zwui::SpectrumAnalyser analyser;
+    zwui::SpectrumAnalyser analyser, analyserIn;
     zwui::GalaxyScope scope;
+    zwui::ModPanel modPanel { processor.apvts, processor.mod, lnf };
+    zwui::PresetBar presetBar;
 
     juce::ToggleButton syncButton { "SYNC" }, pingPongButton { "PING-PONG" }, freezeButton { "FREEZE" },
                        wobbleSyncButton { "SYNC" }, powerButton;
-    juce::ComboBox divisionBox, wobbleDivBox, presetBox;
+    juce::ComboBox divisionBox, wobbleDivBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttach, pingAttach, freezeAttach, wobbleSyncAttach, powerAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionAttach, wobbleDivAttach;
-    int lastPreset = -1;
     double lastTick = 0.0;
+    std::vector<zwui::Knob*> allKnobs;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DriftAudioProcessorEditor)
 };

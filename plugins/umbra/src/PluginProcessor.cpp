@@ -17,6 +17,12 @@ UmbraAudioProcessor::UmbraAudioProcessor()
       apvts(*this, nullptr, "PARAMS", createLayout())
 {
     for (int i = 0; i < 23; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
+    mod.attach(apvts, umbraModTargets());
+    bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze });
+    bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
+    bank.setSafeRange(ParamIDs::highCut, 2500.0f, 20000.0f);
+    bank.setSafeRange(ParamIDs::width, 0.6f, 1.5f);
+    bank.setSafeRange(ParamIDs::duck, 0.0f, 0.7f);
 }
 
 APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
@@ -68,6 +74,7 @@ APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::tilt, 1 }, "Tilt", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
     params.push_back(pct(ParamIDs::bloom, "Bloom", 0.0f));
+    zwui::addModParams(params, umbraModTargets());
     return { params.begin(), params.end() };
 }
 
@@ -75,6 +82,7 @@ void UmbraAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
+    mod.prepare(sampleRate);
     power.prepare(sampleRate, samplesPerBlock, 2);
     meterIn.prepare(sampleRate); meterOut.prepare(sampleRate);
     updateEngineParams();
@@ -91,17 +99,18 @@ bool UmbraAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) con
 void UmbraAudioProcessor::updateEngineParams()
 {
     zw::UmbraParams u;
-    u.preDelayMs = p[0]->load();  u.size    = p[1]->load();  u.decay = p[2]->load();  u.dark  = p[3]->load();
-    u.density    = p[4]->load();  u.motion  = p[5]->load();  u.gravity = p[6]->load(); u.early = p[7]->load();
-    u.duck       = p[8]->load();  u.width   = p[9]->load();  u.mix   = p[10]->load(); u.output = p[11]->load();
+    const auto M = [this](int t) { return mod.value(t); };
+    u.preDelayMs = M(ModT::PreDelay); u.size = M(ModT::Size);     u.decay = M(ModT::Decay); u.dark  = M(ModT::Dark);
+    u.density    = M(ModT::Density);  u.motion = M(ModT::Motion); u.gravity = M(ModT::Gravity); u.early = M(ModT::Early);
+    u.duck       = M(ModT::Duck);     u.width = M(ModT::Width);   u.mix   = M(ModT::Mix);   u.output = p[11]->load();
     u.freeze     = p[12]->load() > 0.5f;
     // Motion sync: slowest reverb LFO (0.09 Hz base) locks to one cycle per division
     u.motionRate = p[14]->load() > 0.5f
                      ? float((1.0 / zwui::divisionSeconds(int(p[15]->load()), hostBpm)) / 0.09)
-                     : p[16]->load();
-    u.lowCutHz = p[17]->load(); u.highCutHz = p[18]->load();
-    u.lowSlope = int(p[19]->load()); u.highSlope = int(p[20]->load()); u.tilt = p[21]->load();
-    u.bloom = p[22]->load();
+                     : M(ModT::MotionRate);
+    u.lowCutHz = M(ModT::LowCut); u.highCutHz = M(ModT::HighCut);
+    u.lowSlope = int(p[19]->load()); u.highSlope = int(p[20]->load()); u.tilt = M(ModT::Tilt);
+    u.bloom = M(ModT::Bloom);
     engine.setParams(u);
 }
 
@@ -109,19 +118,27 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
     hostBpm = zwui::readTransport(*this, motion, hostBpm);
-    updateEngineParams();
     meterIn.push(buffer, motion.levelIn);
+    spectrumIn.push(buffer);
     const int n = buffer.getNumSamples();
     const int numIn = getTotalNumInputChannels(), numOut = getTotalNumOutputChannels();
     power.begin(buffer, p[13]->load() > 0.5f);
-    if (power.skipProcessing()) { motion.levelOut.store(0.0f); return; }
-    if (numOut >= 2)
+    if (power.skipProcessing()) { mod.process(buffer.getReadPointer(0), numIn > 1 ? buffer.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load()); updateEngineParams(); motion.levelOut.store(0.0f); return; }
+    if (numOut >= 2 && numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
+
+    constexpr int kSub = 64;
+    const bool playing = motion.playing.load();
+    double ppq = motion.ppq.load();
+    for (int start = 0; start < n; start += kSub)
     {
-        if (numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
-        engine.process(buffer.getWritePointer(0), buffer.getWritePointer(1), n);
-        for (int ch = 2; ch < numOut; ++ch) buffer.clear(ch, 0, n);
+        const int len = juce::jmin(kSub, n - start);
+        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        updateEngineParams();
+        if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);
+        else if (numOut == 1) engine.processMono(buffer.getWritePointer(0, start), len);
+        if (playing) ppq += len / currentSampleRate * hostBpm / 60.0;
     }
-    else if (numOut == 1) engine.processMono(buffer.getWritePointer(0), n);
+    for (int ch = 2; ch < numOut; ++ch) buffer.clear(ch, 0, n);
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
     spectrum.push(buffer);
@@ -132,13 +149,16 @@ void UmbraAudioProcessor::setCurrentProgram(int index)
 {
     if (index < 0 || index >= Presets::count()) return;
     currentPreset = index;
+    zwui::resetModParams(apvts);
     Presets::apply(index, apvts);
+    bank.clearCurrentUser();
 }
 
 void UmbraAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty("preset", currentPreset, nullptr);
+    bank.writeTo(state);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destData);
 }
 
@@ -150,6 +170,7 @@ void UmbraAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
             auto tree = juce::ValueTree::fromXml(*xml);
             currentPreset = int(tree.getProperty("preset", 0));
             apvts.replaceState(tree);
+            bank.readFrom(tree);
         }
 }
 

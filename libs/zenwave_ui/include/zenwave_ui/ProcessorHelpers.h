@@ -34,7 +34,7 @@ inline double readTransport(juce::AudioProcessor& proc, Motion& m, double fallba
         if (auto pos = ph->getPosition())
         {
             if (auto b = pos->getBpm()) bpm = juce::jlimit(20.0, 300.0, *b);
-            if (auto ppq = pos->getPpqPosition()) m.beatPhase.store(float(*ppq - std::floor(*ppq)));
+            if (auto ppq = pos->getPpqPosition()) { m.beatPhase.store(float(*ppq - std::floor(*ppq))); m.ppq.store(*ppq); }
             m.playing.store(pos->getIsPlaying());
         }
     m.bpm.store(float(bpm));
@@ -110,7 +110,7 @@ namespace zwui {
 class SpectrumTap
 {
 public:
-    static constexpr int kSize = 2048;
+    static constexpr int kSize = 4096;
     void push(const juce::AudioBuffer<float>& b)
     {
         const int n = b.getNumSamples();

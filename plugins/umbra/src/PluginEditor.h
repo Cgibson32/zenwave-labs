@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include <zenwave_ui/ZenWaveUI.h>
+#include <zenwave_ui/ModPanel.h>
+#include <zenwave_ui/PresetBar.h>
 #include "PluginProcessor.h"
 
 class UmbraAudioProcessorEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -14,7 +16,8 @@ public:
 
 private:
     void timerCallback() override;
-    void refreshPresetBox();
+    void installLocks();
+    void syncModRings();
 
     UmbraAudioProcessor& processor;
     // Umbra's accent is a deeper, colder violet than Drift's
@@ -26,15 +29,17 @@ private:
     zwui::Knob lowCut, highCut, tilt;
     juce::ComboBox lowSlopeBox, highSlopeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;
-    zwui::SpectrumAnalyser analyser;
+    zwui::SpectrumAnalyser analyser, analyserIn;
     zwui::GalaxyScope scope;
+    zwui::ModPanel modPanel { processor.apvts, processor.mod, lnf };
+    zwui::PresetBar presetBar;
 
     juce::ToggleButton freezeButton { "FREEZE" }, motionSyncButton { "SYNC" }, powerButton;
-    juce::ComboBox presetBox, motionDivBox;
+    juce::ComboBox motionDivBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> freezeAttach, motionSyncAttach, powerAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> motionDivAttach;
-    int lastPreset = -1;
     double lastTick = 0.0;
+    std::vector<zwui::Knob*> allKnobs;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UmbraAudioProcessorEditor)
 };

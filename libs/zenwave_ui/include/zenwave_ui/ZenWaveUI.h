@@ -38,6 +38,7 @@ struct Motion
     std::atomic<float> beatPhase{ 0.0f };   // 0..1 within the current beat (host)
     std::atomic<float> bpm      { 120.0f };
     std::atomic<bool>  playing  { false };
+    std::atomic<double> ppq     { 0.0 };    // host position in quarter notes
     float time = 0.0f;                      // seconds, editor-side
     float pulse = 0.0f;                     // 0..1 breathing value, editor-side
 };
@@ -222,6 +223,29 @@ public:
         }
         g.setColour(juce::Colours::white.interpolatedWith(accentHi, 0.25f));
         g.fillPath(ptr);
+
+        // Modulation: range arc outside the LED ring + a live cyan dot at the modulated position
+        const float modPos = float(s.getProperties().getWithDefault("modPos", -1.0f));
+        if (modPos >= 0.0f)
+        {
+            const float lo = float(s.getProperties().getWithDefault("modLo", 0.0f)), hi = float(s.getProperties().getWithDefault("modHi", 1.0f));
+            const float mr = radius + 8.5f;
+            juce::Path span; span.addCentredArc(c.x, c.y, mr, mr, 0.0f, startAngle + lo * (endAngle - startAngle), startAngle + hi * (endAngle - startAngle), true);
+            g.setColour(accent2.withAlpha(0.22f)); g.strokePath(span, juce::PathStrokeType(5.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour(accent2.withAlpha(0.85f)); g.strokePath(span, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            const auto dp = c.getPointOnCircumference(mr, startAngle + modPos * (endAngle - startAngle));
+            g.setColour(accent2.withAlpha(0.35f)); g.fillEllipse(dp.x - 5.0f, dp.y - 5.0f, 10.0f, 10.0f);
+            g.setColour(juce::Colours::white); g.fillEllipse(dp.x - 2.2f, dp.y - 2.2f, 4.4f, 4.4f);
+        }
+        // Lock glyph (Warp won't touch this knob)
+        if (bool(s.getProperties().getWithDefault("locked", false)))
+        {
+            const auto lp = juce::Rectangle<float>(c.x + radius * 0.55f, c.y + radius * 0.62f, 9.0f, 7.0f);
+            g.setColour(Palette::bg.withAlpha(0.8f)); g.fillRoundedRectangle(lp.expanded(3.0f), 4.0f);
+            g.setColour(accentHi); g.fillRoundedRectangle(lp, 1.5f);
+            juce::Path sh; sh.addCentredArc(lp.getCentreX(), lp.getY(), 3.0f, 3.5f, 0.0f, -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, true);
+            g.strokePath(sh, juce::PathStrokeType(1.5f));
+        }
     }
 
     void drawToggleButton(juce::Graphics& g, juce::ToggleButton& b, bool hover, bool) override
@@ -263,6 +287,23 @@ public:
         }
     }
 
+    void drawButtonBackground(juce::Graphics& g, juce::Button& b, const juce::Colour&, bool hover, bool down) override
+    {
+        auto r = b.getLocalBounds().toFloat().reduced(1.0f);
+        g.setColour(juce::Colours::black.withAlpha(0.45f)); g.fillRoundedRectangle(r.translated(0, 2.0f), 8.0f);
+        if (down) g.setGradientFill(juce::ColourGradient(accent, r.getX(), r.getY(), accent2.darker(0.2f), r.getRight(), r.getBottom(), false));
+        else g.setGradientFill(juce::ColourGradient(Palette::knobLight, r.getX(), r.getY(), Palette::card, r.getX(), r.getBottom(), false));
+        g.fillRoundedRectangle(r, 8.0f);
+        if (hover && ! down) { for (int i = 3; i >= 1; --i) { g.setColour(accent.withAlpha(0.05f)); g.drawRoundedRectangle(r.expanded(i * 1.5f), 8.0f, 1.0f); } }
+        g.setColour(hover || down ? accent.withAlpha(0.9f) : Palette::cardEdge); g.drawRoundedRectangle(r, 8.0f, 1.0f);
+    }
+    void drawButtonText(juce::Graphics& g, juce::TextButton& b, bool hover, bool down) override
+    {
+        g.setFont(juce::Font(juce::FontOptions(b.getButtonText().length() <= 1 ? 18.0f : 10.5f, juce::Font::bold)));
+        g.setColour(down ? juce::Colours::white : (hover ? Palette::text : accentHi));
+        g.drawText(b.getButtonText(), b.getLocalBounds(), juce::Justification::centred);
+    }
+
     void drawComboBox(juce::Graphics& g, int w, int h, bool, int, int, int, int, juce::ComboBox& box) override
     {
         auto r = juce::Rectangle<float>(0, 0, float(w), float(h)).reduced(0.5f);
@@ -300,21 +341,35 @@ public:
     juce::Colour accent, accentHi, accent2;
 };
 
+// Slider with a right-click hook (lock for Warp) and a parameter id for the mod matrix.
+class ZwSlider : public juce::Slider
+{
+public:
+    std::function<void()> onContextMenu;
+    void mouseDown(const juce::MouseEvent& e) override
+    {
+        if (e.mods.isPopupMenu()) { if (onContextMenu) onContextMenu(); return; }
+        juce::Slider::mouseDown(e);
+    }
+};
+
 struct Knob
 {
-    juce::Slider slider;
+    ZwSlider     slider;
     juce::Label  label;
+    juce::String paramId;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attach;
 
-    void init(juce::Component& parent, juce::AudioProcessorValueTreeState& apvts, const char* paramId,
-              const juce::String& title, bool big)
+    void init(juce::Component& parent, juce::AudioProcessorValueTreeState& apvts, const char* pid,
+              const juce::String& title, bool big, bool textBox = true)
     {
+        paramId = pid;
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, big ? 80 : 66, 17);
-        slider.setPopupDisplayEnabled(false, false, &parent);
+        slider.setTextBoxStyle(textBox ? juce::Slider::TextBoxBelow : juce::Slider::NoTextBox, false, big ? 80 : 66, 17);
+        slider.setPopupDisplayEnabled(! textBox, false, &parent);
         slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.2f, juce::MathConstants<float>::pi * 2.8f, true);
         parent.addAndMakeVisible(slider);
-        attach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, paramId, slider);
+        attach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, pid, slider);
         label.setText(title, juce::dontSendNotification);
         label.setJustificationType(juce::Justification::centred);
         label.setFont(juce::Font(juce::FontOptions(big ? 11.5f : 10.0f, juce::Font::bold)));
@@ -327,6 +382,11 @@ struct Knob
         label.setBounds(x, y - labelH - 2, w, labelH);
         slider.setBounds(x, y, w, h);
     }
+
+    // Editor timer: feed modulation range + live position and lock state into the look-and-feel
+    void setMod(float lo, float hi, float pos) { slider.getProperties().set("modLo", lo); slider.getProperties().set("modHi", hi); slider.getProperties().set("modPos", pos); }
+    void clearMod() { slider.getProperties().set("modPos", -1.0f); }
+    void setLocked(bool on) { slider.getProperties().set("locked", on); }
 };
 
 // ---- Background: static (cached) + animated layers ------------------------------------
@@ -536,12 +596,13 @@ private:
 
 namespace zwui {
 
-// Editor-side analyser: FFT with smoothing, log-frequency bins ready to draw.
+// Editor-side analyser: 4096-point FFT, 160 log bins (20 Hz..20 kHz), fast attack / slow
+// release ballistics plus a peak-hold trace that falls slowly, like a mastering analyser.
 class SpectrumAnalyser
 {
 public:
-    static constexpr int kOrder = 11, kSize = 1 << kOrder, kBins = 96;
-    SpectrumAnalyser() : fft(kOrder), window(kSize, juce::dsp::WindowingFunction<float>::hann) { levels.fill(0.0f); }
+    static constexpr int kOrder = 12, kSize = 1 << kOrder, kBins = 160;
+    SpectrumAnalyser() : fft(kOrder), window(kSize, juce::dsp::WindowingFunction<float>::blackmanHarris) { levels.fill(0.0f); peaks.fill(0.0f); }
 
     template <class Tap> void update(const Tap& tap, double sampleRate)
     {
@@ -555,13 +616,16 @@ public:
             const float f0 = freqForBin(b), f1 = freqForBin(b + 1);
             int i0 = juce::jlimit(1, kSize / 2 - 1, int(f0 / sampleRate * kSize)), i1 = juce::jlimit(i0 + 1, kSize / 2, int(f1 / sampleRate * kSize) + 1);
             float pk = 0.0f; for (int i = i0; i < i1; ++i) pk = juce::jmax(pk, fftData[size_t(i)]);
-            const float db = juce::Decibels::gainToDecibels(pk / (kSize * 0.25f) + 1e-9f);
-            const float norm = juce::jlimit(0.0f, 1.0f, (db + 78.0f) / 78.0f);
-            levels[size_t(b)] = norm > levels[size_t(b)] ? norm : levels[size_t(b)] * 0.86f + norm * 0.14f;
+            // +3 dB/oct tilt so pink-ish program material reads flat, like most pro analysers
+            const float tilt = 0.5f * std::log2(juce::jmax(f0, 20.0f) / 1000.0f) * 3.0f;
+            const float db = juce::Decibels::gainToDecibels(pk / (kSize * 0.18f) + 1e-9f) + tilt;
+            const float norm = juce::jlimit(0.0f, 1.0f, (db + 84.0f) / 84.0f);
+            auto& L = levels[size_t(b)]; L = norm > L ? L + (norm - L) * 0.55f : L * 0.90f + norm * 0.10f;
+            auto& P = peaks[size_t(b)];  P = norm > P ? norm : P - 0.004f;
         }
     }
     static float freqForBin(int b) { return 20.0f * std::pow(1000.0f, float(b) / kBins); }   // 20 Hz .. 20 kHz
-    std::array<float, kBins> levels;
+    std::array<float, kBins> levels, peaks;
 private:
     juce::dsp::FFT fft;
     juce::dsp::WindowingFunction<float> window;
@@ -571,40 +635,69 @@ private:
 
 struct EqCurve { float lowCutHz, highCutHz; int lowSlope, highSlope; float tilt; };
 
-// The "field": log-frequency spectrum of the wet signal with the EQ response drawn over it.
-inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const SpectrumAnalyser& an, const EqCurve& eq,
-                        juce::Colour accent, juce::Colour accent2, float pulse)
+// The "field": a real-time audio spectrum (wet in colour, dry input as a ghost line, peak-hold
+// trace) with the EQ response drawn over it and cutoff handles.
+inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const SpectrumAnalyser& wet, const SpectrumAnalyser* dry,
+                        const EqCurve& eq, juce::Colour accent, juce::Colour accent2, float pulse)
 {
     auto xFor = [&](float hz) { return r.getX() + r.getWidth() * std::log(hz / 20.0f) / std::log(1000.0f); };
-    auto yForDb = [&](float db) { return r.getCentreY() - db / 24.0f * r.getHeight() * 0.5f; };  // ±24 dB range
+    const float top = r.getY() + 6.0f, bottom = r.getBottom() - 1.0f, H = bottom - top;
+    auto yForNorm = [&](float n) { return bottom - n * H; };
+    auto yForDb = [&](float db) { return top + H * 0.32f - db / 24.0f * H * 0.30f; };   // EQ overlay: ±24 dB around a line at 32 %
 
-    g.setColour(Palette::bg.withAlpha(0.55f));
+    juce::Graphics::ScopedSaveState ss(g);
+    juce::Path clip; clip.addRoundedRectangle(r, 10.0f); g.reduceClipRegion(clip);
+    g.setColour(Palette::bg.withAlpha(0.7f));
     g.fillRoundedRectangle(r, 10.0f);
-    // grid
-    g.setColour(juce::Colours::white.withAlpha(0.06f));
-    for (float hz : { 50.f, 100.f, 200.f, 500.f, 1000.f, 2000.f, 5000.f, 10000.f }) g.drawVerticalLine(int(xFor(hz)), r.getY(), r.getBottom());
-    for (float db : { -12.f, 0.f, 12.f }) g.drawHorizontalLine(int(yForDb(db)), r.getX(), r.getRight());
-    g.setFont(juce::Font(juce::FontOptions(8.5f)));
-    g.setColour(Palette::dim.withAlpha(0.8f));
-    for (auto [hz, t] : std::initializer_list<std::pair<float, const char*>>{ { 100.f, "100" }, { 1000.f, "1k" }, { 10000.f, "10k" } })
-        g.drawText(t, int(xFor(hz)) + 3, int(r.getBottom()) - 13, 30, 12, juce::Justification::left);
 
-    // spectrum fill
-    juce::Path spec;
-    spec.startNewSubPath(r.getX(), r.getBottom());
-    for (int b = 0; b < SpectrumAnalyser::kBins; ++b)
+    // grid: octave-ish frequency lines + 12 dB level lines
+    g.setColour(juce::Colours::white.withAlpha(0.05f));
+    for (float hz : { 30.f, 40.f, 50.f, 60.f, 70.f, 80.f, 90.f, 100.f, 200.f, 300.f, 400.f, 500.f, 600.f, 700.f, 800.f, 900.f, 1000.f, 2000.f, 3000.f, 4000.f, 5000.f, 6000.f, 7000.f, 8000.f, 9000.f, 10000.f })
+        g.drawVerticalLine(int(xFor(hz)), top, bottom);
+    g.setColour(juce::Colours::white.withAlpha(0.09f));
+    for (float hz : { 100.f, 1000.f, 10000.f }) g.drawVerticalLine(int(xFor(hz)), top, bottom);
+    for (int db = -12; db >= -72; db -= 12) { g.setColour(juce::Colours::white.withAlpha(db % 24 == 0 ? 0.07f : 0.035f)); g.drawHorizontalLine(int(yForNorm((db + 84.0f) / 84.0f)), r.getX(), r.getRight()); }
+    g.setFont(juce::Font(juce::FontOptions(8.0f)));
+    g.setColour(Palette::dim.withAlpha(0.75f));
+    for (auto [hz, t] : std::initializer_list<std::pair<float, const char*>>{ { 50.f, "50" }, { 100.f, "100" }, { 200.f, "200" }, { 500.f, "500" }, { 1000.f, "1k" }, { 2000.f, "2k" }, { 5000.f, "5k" }, { 10000.f, "10k" } })
+        g.drawText(t, int(xFor(hz)) + 2, int(bottom) - 11, 26, 10, juce::Justification::left);
+    for (int db = -12; db >= -60; db -= 24) g.drawText(juce::String(db), int(r.getRight()) - 22, int(yForNorm((db + 84.0f) / 84.0f)) - 10, 20, 10, juce::Justification::right);
+
+    auto spectrumPath = [&](const std::array<float, SpectrumAnalyser::kBins>& v, bool closed)
     {
-        const float x = r.getX() + r.getWidth() * float(b) / (SpectrumAnalyser::kBins - 1);
-        const float y = r.getBottom() - an.levels[size_t(b)] * r.getHeight() * 0.92f;
-        if (b == 0) spec.lineTo(x, y); else spec.lineTo(x, y);
-    }
-    spec.lineTo(r.getRight(), r.getBottom()); spec.closeSubPath();
-    g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.45f + 0.15f * pulse), r.getX(), r.getY(), accent.withAlpha(0.05f), r.getX(), r.getBottom(), false));
-    g.fillPath(spec);
-    g.setColour(accent2.withAlpha(0.8f));
-    g.strokePath(spec, juce::PathStrokeType(1.2f));
+        juce::Path p;
+        auto pt = [&](int b) { return juce::Point<float>(r.getX() + r.getWidth() * float(b) / (SpectrumAnalyser::kBins - 1), yForNorm(v[size_t(b)])); };
+        if (closed) { p.startNewSubPath(r.getX(), bottom); p.lineTo(pt(0)); } else p.startNewSubPath(pt(0));
+        for (int b = 1; b < SpectrumAnalyser::kBins - 1; ++b) { const auto a = pt(b), c = pt(b + 1); p.quadraticTo(a, (a + c) * 0.5f); }
+        p.lineTo(pt(SpectrumAnalyser::kBins - 1));
+        if (closed) { p.lineTo(r.getRight(), bottom); p.closeSubPath(); }
+        return p;
+    };
 
-    // EQ response
+    // dry input ghost
+    if (dry != nullptr)
+    {
+        auto gp = spectrumPath(dry->levels, true);
+        g.setColour(juce::Colours::white.withAlpha(0.05f)); g.fillPath(gp);
+        g.setColour(juce::Colours::white.withAlpha(0.22f)); g.strokePath(spectrumPath(dry->levels, false), juce::PathStrokeType(1.0f));
+    }
+    // wet spectrum: aurora fill, bright edge, soft glow
+    {
+        auto fillP = spectrumPath(wet.levels, true);
+        g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.55f + 0.15f * pulse), r.getX(), top, accent.withAlpha(0.06f), r.getX(), bottom, false));
+        g.fillPath(fillP);
+        // vertical "bars" shimmer: thin lines every 4 bins fading up the fill
+        g.setColour(juce::Colours::white.withAlpha(0.05f));
+        for (int b = 0; b < SpectrumAnalyser::kBins; b += 4) { const float x = r.getX() + r.getWidth() * float(b) / (SpectrumAnalyser::kBins - 1); g.drawVerticalLine(int(x), yForNorm(wet.levels[size_t(b)]), bottom); }
+        auto edge = spectrumPath(wet.levels, false);
+        glowStroke(g, edge, accent2.withAlpha(0.9f), 1.4f, 0.8f + pulse * 0.5f);
+        // peak hold
+        juce::Path pk = spectrumPath(wet.peaks, false);
+        g.setColour(juce::Colours::white.withAlpha(0.35f));
+        g.strokePath(pk, juce::PathStrokeType(0.8f));
+    }
+
+    // EQ response overlay
     juce::Path curve; bool first = true;
     for (int i = 0; i <= 160; ++i)
     {
@@ -614,19 +707,25 @@ inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const Spect
         const float lpMag = 1.0f / std::sqrt(1.0f + std::pow(hz / eq.highCutHz, 2.0f * nHigh));
         const float tiltDb = eq.tilt * 6.0f * std::tanh(std::log(hz / 1000.0f) * 0.9f);
         const float db = juce::Decibels::gainToDecibels(hpMag * lpMag + 1e-6f) + tiltDb;
-        const float x = xFor(hz), y = juce::jlimit(r.getY(), r.getBottom(), yForDb(db));
+        const float x = xFor(hz), y = juce::jlimit(top, bottom, yForDb(db));
         if (first) { curve.startNewSubPath(x, y); first = false; } else curve.lineTo(x, y);
     }
-    glowStroke(g, curve, juce::Colours::white.interpolatedWith(accent, 0.25f), 2.0f, 1.0f + pulse * 0.5f);
+    // shaded area under the EQ curve shows what the cuts remove
+    {
+        juce::Path shade(curve); shade.lineTo(r.getRight(), top); shade.lineTo(r.getX(), top); shade.closeSubPath();
+        g.setColour(Palette::magenta.withAlpha(0.06f)); g.fillPath(shade);
+    }
+    glowStroke(g, curve, juce::Colours::white.interpolatedWith(accent, 0.2f), 1.8f, 0.9f + pulse * 0.5f);
 
-    // cutoff markers
+    // cutoff handles
     for (float hz : { eq.lowCutHz, eq.highCutHz })
     {
         const float x = xFor(juce::jlimit(20.0f, 20000.0f, hz));
-        g.setColour(accent.withAlpha(0.6f));
-        g.drawVerticalLine(int(x), r.getY() + 4.0f, r.getBottom() - 4.0f);
-        g.setColour(juce::Colours::white);
-        g.fillEllipse(x - 3.0f, yForDb(-3.0f) - 3.0f, 6.0f, 6.0f);
+        g.setColour(accent.withAlpha(0.5f));
+        g.drawVerticalLine(int(x), top, bottom);
+        const float y = yForDb(-3.0f);
+        g.setColour(accent2.withAlpha(0.4f)); g.fillEllipse(x - 6.0f, y - 6.0f, 12.0f, 12.0f);
+        g.setColour(juce::Colours::white); g.fillEllipse(x - 3.0f, y - 3.0f, 6.0f, 6.0f);
     }
     g.setColour(accent.withAlpha(0.5f));
     g.drawRoundedRectangle(r, 10.0f, 1.0f);

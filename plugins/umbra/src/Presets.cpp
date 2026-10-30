@@ -1,5 +1,6 @@
 #include "Presets.h"
 #include "PluginProcessor.h"
+#include <zenwave_ui/Modulation.h>
 
 namespace Presets
 {
@@ -79,5 +80,13 @@ namespace Presets
         setParam(apvts, ParamIDs::tilt,       0.0f);
         const juce::String n(p.name);
         setParam(apvts, ParamIDs::bloom, (n == "Umbra (Signature)" || n == "Pre-Drop Black Hole" || n == "Impact Bloom") ? 0.6f : (n == "Halftime Cathedral" ? 0.35f : 0.0f));
+
+        // Factory motion (targets are 1-based: PreDelay=1 Size Decay Dark Density Motion Gravity Early Duck Width Mix MotionRate LowCut HighCut Tilt Bloom=16)
+        if (n == "Umbra (Signature)")    { zwui::setLfo(apvts, 0, 6, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 1, 4, 0.15f);  zwui::setModSlot(apvts, 1, 1, 10, 0.12f); }
+        if (n == "Pre-Drop Black Hole")  { zwui::setModSlot(apvts, 0, 3, 3, 0.30f);   zwui::setModSlot(apvts, 1, 3, 2, 0.20f); }
+        if (n == "Halftime Cathedral")   { zwui::setLfo(apvts, 1, 0, true, 10, 0.1f);  zwui::setModSlot(apvts, 0, 2, 10, 0.20f); }
+        if (n == "Collapsed Star")       { zwui::setLfo(apvts, 0, 6, true, 12, 0.1f);  zwui::setModSlot(apvts, 0, 1, 1, 0.25f);  zwui::setModSlot(apvts, 1, 1, 4, 0.20f); }
+        if (n == "Reverse-Feel Swell")   { zwui::setModSlot(apvts, 0, 3, 11, -0.35f); zwui::setModSlot(apvts, 1, 3, 3, 0.25f); }
+        if (n == "Lead Halo (Ducked)")   { zwui::setModSlot(apvts, 0, 3, 14, -0.25f); }
     }
 }

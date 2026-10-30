@@ -2,6 +2,8 @@
 #include <JuceHeader.h>
 #include <zenwave/zenwave.h>
 #include <zenwave_ui/ProcessorHelpers.h>
+#include <zenwave_ui/Modulation.h>
+#include <zenwave_ui/PresetBank.h>
 #include "Presets.h"
 
 namespace ParamIDs
@@ -31,6 +33,18 @@ namespace ParamIDs
     inline constexpr auto highSlope  = "highslope";
     inline constexpr auto tilt       = "tilt";
     inline constexpr auto color      = "color";
+}
+
+// Modulation targets (order = index into the mod matrix; names appear in the routing menus)
+namespace ModT { enum { Time, Feedback, Wobble, Age, Space, Size, Decay, Width, Spread, Mix, WobbleRate, LowCut, HighCut, Tilt, Color, Count }; }
+inline const std::vector<zwui::ModTarget>& driftModTargets()
+{
+    static const std::vector<zwui::ModTarget> t {
+        { ParamIDs::time, "Time" }, { ParamIDs::feedback, "Feedback" }, { ParamIDs::wowFlutter, "Wobble" }, { ParamIDs::age, "Age" },
+        { ParamIDs::space, "Space" }, { ParamIDs::size, "Size" }, { ParamIDs::decay, "Decay" }, { ParamIDs::width, "Width" },
+        { ParamIDs::spread, "Spread" }, { ParamIDs::mix, "Mix" }, { ParamIDs::wobbleRate, "Wobble Rate" }, { ParamIDs::lowCut, "Low Cut" },
+        { ParamIDs::highCut, "High Cut" }, { ParamIDs::tilt, "Tilt" }, { ParamIDs::color, "Color" } };
+    return t;
 }
 
 class DriftAudioProcessor : public juce::AudioProcessor
@@ -64,8 +78,10 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     zwui::Motion motion;
-    zwui::SpectrumTap spectrum;
+    zwui::SpectrumTap spectrum, spectrumIn;
     zwui::StereoTap stereo;
+    zwui::ModMatrix mod;
+    zwui::PresetBank bank { apvts, "Drift" };
     double currentSampleRate = 48000.0;
 
 private:

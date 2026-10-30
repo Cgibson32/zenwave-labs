@@ -1,7 +1,9 @@
 #include "PluginEditor.h"
 
 DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
-    : AudioProcessorEditor(&p), processor(p)
+    : AudioProcessorEditor(&p), processor(p),
+      presetBar(p.bank, { [] { return Presets::count(); }, [](int i) { return Presets::name(i); }, [](int i) { return Presets::category(i); },
+                          [&p] { return p.getCurrentProgram(); }, [&p](int i) { p.setCurrentProgram(i); } }, lnf)
 {
     setLookAndFeel(&lnf);
 
@@ -38,35 +40,51 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     divisionAttach  = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, ParamIDs::division, divisionBox);
     wobbleDivAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, ParamIDs::wobbleDiv, wobbleDivBox);
 
-    addAndMakeVisible(presetBox);
-    refreshPresetBox();
-    presetBox.onChange = [this] {
-        const int idx = presetBox.getSelectedId() - 1;
-        if (idx >= 0) processor.setCurrentProgram(idx);
-    };
+    addAndMakeVisible(presetBar);
+    addAndMakeVisible(modPanel);
+    allKnobs = { &time, &feedback, &wobble, &age, &space, &mix, &size, &decay, &width, &spread, &output, &wobbleRate, &color, &lowCut, &highCut, &tilt };
+    installLocks();
 
     setResizable(true, true);
-    setResizeLimits(704, 560, 1408, 1120);
-    getConstrainer()->setFixedAspectRatio(880.0 / 700.0);
-    setSize(880, 700);
+    setResizeLimits(704, 712, 1408, 1424);
+    getConstrainer()->setFixedAspectRatio(880.0 / 890.0);
+    setSize(880, 890);
     lastTick = juce::Time::getMillisecondCounterHiRes();
     startTimerHz(30);
 }
 
 DriftAudioProcessorEditor::~DriftAudioProcessorEditor() { setLookAndFeel(nullptr); }
 
-void DriftAudioProcessorEditor::refreshPresetBox()
+void DriftAudioProcessorEditor::installLocks()
 {
-    presetBox.clear(juce::dontSendNotification);
-    juce::String lastCat;
-    for (int i = 0; i < Presets::count(); ++i)
+    for (auto* k : allKnobs)
     {
-        const auto cat = Presets::category(i);
-        if (cat != lastCat) { if (i > 0) presetBox.addSeparator(); presetBox.addSectionHeading(cat); lastCat = cat; }
-        presetBox.addItem(Presets::name(i), i + 1);
+        k->slider.onContextMenu = [this, k]
+        {
+            juce::PopupMenu m;
+            m.addItem(1, processor.bank.isLocked(k->paramId) ? "Unlock for Warp" : "Lock for Warp");
+            m.addItem(2, "Reset to default");
+            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(k->slider), [this, k](int r)
+            {
+                if (r == 1) processor.bank.toggleLock(k->paramId);
+                if (r == 2) if (auto* rp = processor.apvts.getParameter(k->paramId)) { rp->beginChangeGesture(); rp->setValueNotifyingHost(rp->getDefaultValue()); rp->endChangeGesture(); }
+            });
+        };
     }
-    presetBox.setSelectedId(processor.getCurrentProgram() + 1, juce::dontSendNotification);
-    lastPreset = processor.getCurrentProgram();
+}
+
+void DriftAudioProcessorEditor::syncModRings()
+{
+    const auto& targets = driftModTargets();
+    for (auto* k : allKnobs)
+    {
+        k->setLocked(processor.bank.isLocked(k->paramId));
+        int ti = -1;
+        for (int i = 0; i < int(targets.size()); ++i) if (k->paramId == targets[size_t(i)].id) { ti = i; break; }
+        const float pos = ti >= 0 ? processor.mod.modPos[size_t(ti)].load() : -1.0f;
+        if (pos >= 0.0f) { const auto sp = processor.mod.span(ti); k->setMod(sp.first, sp.second, pos); }
+        else k->clearMod();
+    }
 }
 
 void DriftAudioProcessorEditor::timerCallback()
@@ -77,13 +95,11 @@ void DriftAudioProcessorEditor::timerCallback()
     stage.tick(processor.motion, dt);
     lnf.pulse = processor.motion.pulse;
     analyser.update(processor.spectrum, processor.currentSampleRate);
+    analyserIn.update(processor.spectrumIn, processor.currentSampleRate);
     scope.update(processor.stereo);
-
-    if (processor.getCurrentProgram() != lastPreset)
-    {
-        lastPreset = processor.getCurrentProgram();
-        presetBox.setSelectedId(lastPreset + 1, juce::dontSendNotification);
-    }
+    presetBar.sync();
+    modPanel.tick();
+    syncModRings();
     const bool sync = syncButton.getToggleState();
     divisionBox.setEnabled(sync); divisionBox.setAlpha(sync ? 1.0f : 0.4f);
     time.slider.setAlpha(sync ? 0.35f : 1.0f);
@@ -106,10 +122,11 @@ void DriftAudioProcessorEditor::paint(juce::Graphics& g)
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 84 * s, 836 * s, 262 * s), "ECHO", lnf.accent, lnf.accent2, s);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 358 * s, 836 * s, 160 * s), "DEEP SPACE", lnf.accent2, lnf.accent, s);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 530 * s, 836 * s, 158 * s), "FIELD", lnf.accent, lnf.accent2, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 700 * s, 836 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
     scope.draw(g, juce::Rectangle<float>(40 * s, 548 * s, 128 * s, 128 * s), lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::EqCurve eq { lowCut.slider.getValue() > 0 ? float(lowCut.slider.getValue()) : 20.0f, float(highCut.slider.getValue()),
                        juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
-    zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
+    zwui::drawEqField(g, juce::Rectangle<float>(186 * s, 552 * s, 360 * s, 120 * s), analyser, &analyserIn, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
@@ -118,9 +135,12 @@ void DriftAudioProcessorEditor::resized()
     const float s = float(getWidth()) / 880.0f;
     auto S = [s](int v) { return juce::roundToInt(v * s); };
 
-    presetBox.setBounds(S(452), S(22), S(236), S(30));
-    freezeButton.setBounds(S(696), S(22), S(78), S(30));
-    powerButton.setBounds(S(812), S(20), S(34), S(34));
+    presetBar.setBounds(0, 0, getWidth(), S(60));
+    presetBar.layoutScaled(s, 424);
+    powerButton.setBounds(S(824), S(20), S(34), S(34));
+    freezeButton.setBounds(S(752), S(300), S(84), S(26));
+    modPanel.setBounds(S(22), S(700), S(836), S(170));
+    modPanel.layoutScaled(s);
 
     zwui::Knob* bigs[] = { &time, &feedback, &wobble, &age, &space, &mix };
     int x = S(44);

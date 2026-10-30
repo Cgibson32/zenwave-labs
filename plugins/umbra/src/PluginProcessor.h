@@ -2,6 +2,8 @@
 #include <JuceHeader.h>
 #include <zenwave/zenwave.h>
 #include <zenwave_ui/ProcessorHelpers.h>
+#include <zenwave_ui/Modulation.h>
+#include <zenwave_ui/PresetBank.h>
 #include "Presets.h"
 
 namespace ParamIDs
@@ -29,6 +31,17 @@ namespace ParamIDs
     inline constexpr auto highSlope  = "highslope";
     inline constexpr auto tilt       = "tilt";
     inline constexpr auto bloom      = "bloom";
+}
+
+namespace ModT { enum { PreDelay, Size, Decay, Dark, Density, Motion, Gravity, Early, Duck, Width, Mix, MotionRate, LowCut, HighCut, Tilt, Bloom, Count }; }
+inline const std::vector<zwui::ModTarget>& umbraModTargets()
+{
+    static const std::vector<zwui::ModTarget> t {
+        { ParamIDs::preDelay, "Pre-Delay" }, { ParamIDs::size, "Size" }, { ParamIDs::decay, "Decay" }, { ParamIDs::dark, "Dark" },
+        { ParamIDs::density, "Density" }, { ParamIDs::motion, "Motion" }, { ParamIDs::gravity, "Gravity" }, { ParamIDs::early, "Early" },
+        { ParamIDs::duck, "Duck" }, { ParamIDs::width, "Width" }, { ParamIDs::mix, "Mix" }, { ParamIDs::motionRate, "Motion Rate" },
+        { ParamIDs::lowCut, "Low Cut" }, { ParamIDs::highCut, "High Cut" }, { ParamIDs::tilt, "Tilt" }, { ParamIDs::bloom, "Bloom" } };
+    return t;
 }
 
 class UmbraAudioProcessor : public juce::AudioProcessor
@@ -62,8 +75,10 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     zwui::Motion motion;
-    zwui::SpectrumTap spectrum;
+    zwui::SpectrumTap spectrum, spectrumIn;
     zwui::StereoTap stereo;
+    zwui::ModMatrix mod;
+    zwui::PresetBank bank { apvts, "Umbra" };
     double currentSampleRate = 48000.0;
 
 private:

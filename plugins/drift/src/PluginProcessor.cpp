@@ -35,6 +35,12 @@ DriftAudioProcessor::DriftAudioProcessor()
     pHighSlope = apvts.getRawParameterValue(ParamIDs::highSlope);
     pTilt = apvts.getRawParameterValue(ParamIDs::tilt);
     pColor = apvts.getRawParameterValue(ParamIDs::color);
+    mod.attach(apvts, driftModTargets());
+    bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::freeze });
+    bank.setSafeRange(ParamIDs::feedback, 0.0f, 0.82f);
+    bank.setSafeRange(ParamIDs::lowCut, 20.0f, 400.0f);
+    bank.setSafeRange(ParamIDs::highCut, 2500.0f, 20000.0f);
+    bank.setSafeRange(ParamIDs::width, 0.6f, 1.5f);
 }
 
 APVTS::ParameterLayout DriftAudioProcessor::createLayout()
@@ -99,6 +105,7 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::color, 1 }, "Color", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return v < -0.01f ? "Dark " + juce::String(juce::roundToInt(-v * 100)) + " %" : v > 0.01f ? "Thin " + juce::String(juce::roundToInt(v * 100)) + " %" : juce::String("Off"); })));
+    zwui::addModParams(params, driftModTargets());
     return { params.begin(), params.end() };
 }
 
@@ -106,6 +113,7 @@ void DriftAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
+    mod.prepare(sampleRate);
     monoScratch.setSize(1, samplesPerBlock);
     power.prepare(sampleRate, samplesPerBlock, 2);
     meterIn.prepare(sampleRate); meterOut.prepare(sampleRate);
@@ -128,26 +136,27 @@ float DriftAudioProcessor::syncedTimeMs() const
 void DriftAudioProcessor::updateEngineParams()
 {
     zw::DriftParams p;
-    p.timeMs     = pSync->load() > 0.5f ? syncedTimeMs() : pTime->load();
-    p.feedback   = pFeedback->load();
-    p.wowFlutter = pWow->load();
-    p.age        = pAge->load();
-    p.space      = pSpace->load();
-    p.size       = pSize->load();
-    p.decay      = pDecay->load();
-    p.width      = pWidth->load();
-    p.spread     = pSpread->load();
+    const auto M = [this](int t) { return mod.value(t); };
+    p.timeMs     = pSync->load() > 0.5f ? syncedTimeMs() * std::pow(2.0f, mod.offsetNorm(ModT::Time) * 2.0f) : M(ModT::Time);   // synced: ±2 octaves
+    p.feedback   = M(ModT::Feedback);
+    p.wowFlutter = M(ModT::Wobble);
+    p.age        = M(ModT::Age);
+    p.space      = M(ModT::Space);
+    p.size       = M(ModT::Size);
+    p.decay      = M(ModT::Decay);
+    p.width      = M(ModT::Width);
+    p.spread     = M(ModT::Spread);
     p.pingPong   = pPingPong->load() > 0.5f;
     p.freeze     = pFreeze->load() > 0.5f;
-    p.mix        = pMix->load();
+    p.mix        = M(ModT::Mix);
     p.output     = pOutput->load();
     p.wobbleHz   = pWobbleSync->load() > 0.5f
                      ? float(1.0 / zwui::divisionSeconds(int(pWobbleDiv->load()), hostBpm))
-                     : pWobbleRate->load();
-    p.lowCutHz  = pLowCut->load();  p.highCutHz = pHighCut->load();
+                     : M(ModT::WobbleRate);
+    p.lowCutHz  = M(ModT::LowCut);  p.highCutHz = M(ModT::HighCut);
     p.lowSlope  = int(pLowSlope->load()); p.highSlope = int(pHighSlope->load());
-    p.tilt      = pTilt->load();
-    p.color     = pColor->load();
+    p.tilt      = M(ModT::Tilt);
+    p.color     = M(ModT::Color);
     engine.setParams(p);
 }
 
@@ -156,26 +165,32 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     juce::ScopedNoDenormals noDenormals;
 
     hostBpm = zwui::readTransport(*this, motion, hostBpm);
-    updateEngineParams();
     meterIn.push(buffer, motion.levelIn);
+    spectrumIn.push(buffer);
 
     const int n = buffer.getNumSamples();
     const int numIn = getTotalNumInputChannels();
     const int numOut = getTotalNumOutputChannels();
 
     power.begin(buffer, pPower->load() > 0.5f);
-    if (power.skipProcessing()) { motion.levelOut.store(0.0f); return; }
+    if (power.skipProcessing()) { mod.process(buffer.getReadPointer(0), numIn > 1 ? buffer.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load()); updateEngineParams(); motion.levelOut.store(0.0f); return; }
 
-    if (numOut >= 2)
+    if (numOut >= 2 && numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
+
+    // Sub-block loop so modulation moves smoothly inside large host buffers
+    constexpr int kSub = 64;
+    const bool playing = motion.playing.load();
+    double ppq = motion.ppq.load();
+    for (int start = 0; start < n; start += kSub)
     {
-        if (numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
-        engine.process(buffer.getWritePointer(0), buffer.getWritePointer(1), n);
-        for (int ch = 2; ch < numOut; ++ch) buffer.clear(ch, 0, n);
+        const int len = juce::jmin(kSub, n - start);
+        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        updateEngineParams();
+        if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);
+        else if (numOut == 1) engine.processMono(buffer.getWritePointer(0, start), len);
+        if (playing) ppq += len / currentSampleRate * hostBpm / 60.0;
     }
-    else if (numOut == 1)
-    {
-        engine.processMono(buffer.getWritePointer(0), n);
-    }
+    for (int ch = 2; ch < numOut; ++ch) buffer.clear(ch, 0, n);
 
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
@@ -187,13 +202,16 @@ void DriftAudioProcessor::setCurrentProgram(int index)
 {
     if (index < 0 || index >= Presets::count()) return;
     currentPreset = index;
+    zwui::resetModParams(apvts);
     Presets::apply(index, apvts);
+    bank.clearCurrentUser();
 }
 
 void DriftAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty("preset", currentPreset, nullptr);
+    bank.writeTo(state);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destData);
 }
 
@@ -205,6 +223,7 @@ void DriftAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
             auto tree = juce::ValueTree::fromXml(*xml);
             currentPreset = int(tree.getProperty("preset", 0));
             apvts.replaceState(tree);
+            bank.readFrom(tree);
         }
 }
 

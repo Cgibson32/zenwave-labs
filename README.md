@@ -49,3 +49,9 @@ Drift (free) → Umbra (dark reverb, $49) → Halo (shimmer reverb, $49) → Cor
 - Every continuous parameter is smoothed. Every extreme setting is tested for stability.
 - Sub-safe by default: nothing below 60–90 Hz goes into feedback or reverb loops.
 - Flat prices. No sales. New releases are the only scarcity.
+
+## Motion & presets (v0.4)
+
+- **MOTION card** — two LFOs (sine / triangle / saw up / saw down / square / random / drift; free-running or tempo-synced and phase-locked to the host) and an envelope follower (attack / release / sensitivity), routed through four slots to any continuous knob. Modulated knobs show a range arc and a live cyan dot.
+- **Presets** — ‹ › browse, **SAVE** writes a user preset to `Documents/ZenWave Labs/<Plugin>/Presets/`, **A | B** compare (right-click copies the current slot to the other), **WARP** randomises (gentle; Shift = bolder; Cmd/Ctrl = anywhere). Right-click a knob to lock it from Warp or reset it.
+- **Field** — real-time spectrum (4096-pt FFT, 160 log bins, peak hold, dry-input ghost) with the EQ response and cutoff handles overlaid.

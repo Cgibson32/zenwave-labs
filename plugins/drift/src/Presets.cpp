@@ -1,5 +1,6 @@
 #include "Presets.h"
 #include "PluginProcessor.h"
+#include <zenwave_ui/Modulation.h>
 
 namespace Presets
 {
@@ -90,5 +91,16 @@ namespace Presets
         setParam(apvts, ParamIDs::highSlope,  1.0f);
         setParam(apvts, ParamIDs::tilt,       0.0f);
         setParam(apvts, ParamIDs::color,      juce::String(p.name) == "Deep Dub Chamber" ? -0.45f : (juce::String(p.name) == "Alien Transmission" ? 0.6f : 0.0f));
+
+        // Factory motion (targets 1-based: Time=1 Feedback Wobble Age Space Size Decay Width Spread Mix WobbleRate LowCut HighCut Tilt Color=15)
+        const juce::String n(p.name);
+        if (n == "Nebula Wash")          { zwui::setLfo(apvts, 1, 6, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 2, 8, 0.25f);  zwui::setModSlot(apvts, 1, 2, 15, -0.20f); }
+        if (n == "Alien Transmission")   { zwui::setLfo(apvts, 0, 5, true, 5, 1.0f);   zwui::setLfo(apvts, 1, 0, false, 10, 0.3f);
+                                           zwui::setModSlot(apvts, 0, 1, 1, 0.12f);  zwui::setModSlot(apvts, 1, 2, 9, 0.50f); }
+        if (n == "Broken Walkman")       { zwui::setLfo(apvts, 0, 6, false, 8, 0.9f);  zwui::setModSlot(apvts, 0, 1, 11, 0.30f); zwui::setModSlot(apvts, 1, 1, 4, 0.15f); }
+        if (n == "Pre-Drop Vacuum")      { zwui::setModSlot(apvts, 0, 3, 2, 0.25f);   zwui::setModSlot(apvts, 1, 3, 5, 0.30f); }
+        if (n == "Transition Sweep")     { zwui::setLfo(apvts, 0, 3, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 1, 12, 0.70f); zwui::setModSlot(apvts, 1, 1, 8, 0.20f); }
+        if (n == "Orbit Decay")          { zwui::setLfo(apvts, 1, 0, true, 10, 0.1f);  zwui::setModSlot(apvts, 0, 2, 9, 0.35f); }
+        if (n == "Hazy Keys")            { zwui::setLfo(apvts, 1, 6, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 2, 3, 0.20f);  zwui::setModSlot(apvts, 1, 2, 15, -0.15f); }
     }
 }

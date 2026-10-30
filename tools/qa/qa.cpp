@@ -129,6 +129,35 @@ int main()
         power->setValueNotifyingHost(1.0f);
     }
 
+    // 5) Modulation stress: every LFO shape, fast free rate, routed hard to the first 3 targets + env → target 4.
+    //    Modulation must never click or blow up, whatever it is pointed at.
+    {
+        auto set = [&](const juce::String& id, float plain) { for (auto* pp : proc->getParameters()) if (auto* r = dynamic_cast<juce::RangedAudioParameter*>(pp)) if (r->paramID == id) { r->setValueNotifyingHost(r->convertTo0to1(plain)); return; } };
+        proc->setCurrentProgram(0);
+        int numTargets = 0;
+        for (auto* pp : proc->getParameters()) if (auto* c = dynamic_cast<juce::AudioParameterChoice*>(pp)) if (c->paramID == "mod1dst") numTargets = c->choices.size() - 1;
+        for (int shape = 0; shape < 7; ++shape)
+        {
+            set("lfo1shape", float(shape)); set("lfo1sync", 0.0f); set("lfo1rate", 5.0f);
+            set("lfo2shape", float((shape + 3) % 7)); set("lfo2sync", 0.0f); set("lfo2rate", 0.7f);
+            Stats total;
+            for (int tg = 1; tg <= numTargets; tg += 3)
+            {
+                set("mod1src", 1.0f); set("mod1dst", float(tg));                         set("mod1amt", 0.8f);
+                set("mod2src", 2.0f); set("mod2dst", float(std::min(tg + 1, numTargets))); set("mod2amt", -0.7f);
+                set("mod3src", 3.0f); set("mod3dst", float(std::min(tg + 2, numTargets))); set("mod3amt", 0.9f);
+                run(*proc, int(sr * 0.2 / block), t, sr, b, mb, last);
+                auto s = run(*proc, int(sr * 1.2 / block), t, sr, b, mb, last);
+                total.finite &= s.finite; total.peak = std::max(total.peak, s.peak); total.clicks += s.clicks;
+            }
+            QA_CHECK(total.finite, "modulation shape %d produced NaN/Inf", shape);
+            QA_CHECK(total.peak < 4.1f, "modulation shape %d peak %.2f", shape, total.peak);
+            QA_CHECK(total.clicks <= 2, "modulation shape %d had %d clicks", shape, total.clicks);
+            std::printf("  mod    shape %d across %d targets   peak %5.2f  clicks %d\n", shape, numTargets, total.peak, total.clicks);
+        }
+        for (int i = 1; i <= 4; ++i) set("mod" + juce::String(i) + "src", 0.0f);
+    }
+
     std::printf("%s (%d failure%s)\n", failures ? "QA FAILED" : "QA PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }
