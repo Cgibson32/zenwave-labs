@@ -32,7 +32,12 @@ struct DriftParams
     bool  pingPong   = true;
     bool  freeze     = false;
     float spread     = 0.0f;    // -1..1 L/R time offset
-    float wobbleHz   = 0.45f;   // wow rate (free or tempo-derived)
+    float wobbleHz   = 0.45f;   // wow rate (free or tempo-derived)    // Wet-path EQ
+    float lowCutHz   = 20.0f;   // 20..2000
+    float highCutHz  = 20000.0f;// 1000..20000
+    int   lowSlope   = 1;       // 0=6, 1=12, 2=24, 3=48 dB/oct
+    int   highSlope  = 1;
+    float tilt       = 0.0f;    // -1..1 (dark..bright)
 };
 
 class DriftEngine
@@ -55,6 +60,12 @@ public:
         }
         wf[1].setSampleRate(sr);   // re-seed phases differently for R
         reverb.prepare(sr);
+        for (int c = 0; c < 2; ++c)
+        {
+            lowCut[c].setSampleRate(sr);  lowCut[c].setType(CutFilter::Type::Lowcut);
+            highCut[c].setSampleRate(sr); highCut[c].setType(CutFilter::Type::Highcut);
+            tiltEq[c].setSampleRate(sr);
+        }
         for (auto* s : { &smTime, &smFeedback, &smMix, &smSpace, &smOut, &smWidth })
         { s->setSampleRate(sr); s->setTime(30.0f); }
         smTime.setTime(120.0f);     // slower: avoids pitch zips on big time jumps
@@ -99,7 +110,14 @@ public:
         reverb.setDamping(lerp(11000.0f, 3000.0f, p.age));
         reverb.setModDepth(0.35f + p.wowFlutter * 0.4f);
         reverb.setDiffusion(0.7f);
-        reverb.setFreeze(p.freeze);
+        reverb.setFreeze(p.freeze);        for (int c = 0; c < 2; ++c)
+        {
+            lowCut[c].setSlope(static_cast<CutFilter::Slope>(clampi(p.lowSlope, 0, 3)));
+            highCut[c].setSlope(static_cast<CutFilter::Slope>(clampi(p.highSlope, 0, 3)));
+            lowCut[c].setCutoff(p.lowCutHz);
+            highCut[c].setCutoff(p.highCutHz);
+            tiltEq[c].setTilt(p.tilt);
+        }
     }
 
     void process(float* L, float* R, int n) noexcept
@@ -145,6 +163,10 @@ public:
 
             float wetL = (agedL + rvL * 1.6f) * 0.8f;
             float wetR = (agedR + rvR * 1.6f) * 0.8f;
+
+            // Wet EQ: cuts + tilt
+            wetL = tiltEq[0].process(highCut[0].process(lowCut[0].process(wetL)));
+            wetR = tiltEq[1].process(highCut[1].process(lowCut[1].process(wetR)));
 
             // Width (mid/side)
             const float mid  = 0.5f * (wetL + wetR);
@@ -195,6 +217,8 @@ private:
     Noise noise { 0x1234567u };
     float hissGain = 0.0f;
     float env[2] { 0.0f, 0.0f };
+    CutFilter lowCut[2], highCut[2];
+    TiltEQ tiltEq[2];
     Smoother smTime, smFeedback, smMix, smSpace, smOut, smWidth;
     float scratchR[8192] {};
 };

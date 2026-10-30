@@ -34,14 +34,16 @@ public:
             lfo[i].setShape(LFO::Shape::Sine);
             lfo[i].reset(static_cast<float>(i) / kLines);
         }
-        for (int i = 0; i < 4; ++i)
-        {
-            inAP[i].prepare(sr, 0.08f);
-            inLfo[i].setSampleRate(sr);
-            inLfo[i].setRate(0.11f + 0.07f * i);
-            inLfo[i].setShape(LFO::Shape::Sine);
-            inLfo[i].reset(0.25f * i);
-        }
+        for (int c = 0; c < 2; ++c)
+            for (int i = 0; i < 4; ++i)
+            {
+                inAP[c][i].prepare(sr, 0.08f);
+                inLfo[c][i].setSampleRate(sr);
+                inLfo[c][i].setRate(0.11f + 0.07f * i + 0.013f * c);
+                inLfo[c][i].setShape(LFO::Shape::Sine);
+                inLfo[c][i].reset(0.25f * i + 0.5f * c);
+            }
+        loopHP2.setSampleRate(sr); loopHP2.setHighpass(90.0f);
         for (int c = 0; c < 2; ++c) for (int i = 0; i < 2; ++i) outAP[c][i].prepare(sr, 0.03f);
         loopHP.setSampleRate(sr);
         loopHP.setHighpass(90.0f);
@@ -55,7 +57,8 @@ public:
     void reset() noexcept
     {
         for (auto& l : lines) l.reset();
-        for (auto& a : inAP) a.reset();
+        for (auto& ch : inAP) for (auto& a : ch) a.reset();
+        loopHP2.reset();
         for (auto& c : outAP) for (auto& a : c) a.reset();
         for (auto& f : damp) f.reset();
         for (auto& f : lineHP) f.reset();
@@ -77,7 +80,7 @@ public:
     void setDecay(float d) noexcept { setDecaySeconds(0.4f * std::pow(60.0f, clampf(d, 0.0f, 1.0f))); } // 0.4 s .. 24 s
 
     void setDamping(float hz) noexcept { for (auto& f : damp) f.setLowpass(clampf(hz, 500.0f, 20000.0f)); }
-    void setLoopHighpass(float hz) noexcept { loopHP.setHighpass(hz); for (auto& f : lineHP) f.setHighpass(hz * 0.5f); }
+    void setLoopHighpass(float hz) noexcept { loopHP.setHighpass(hz); loopHP2.setHighpass(hz); for (auto& f : lineHP) f.setHighpass(hz * 0.5f); }
     void setDiffusion(float g) noexcept { diffusion = 0.45f + clampf(g, 0.0f, 1.0f) * 0.35f; }
     void setModDepth(float d) noexcept { modDepth = clampf(d, 0.0f, 1.0f) * 0.0025f * static_cast<float>(sampleRate); } // up to 2.5 ms
     void setModRate(float mult) noexcept
@@ -88,13 +91,16 @@ public:
 
     void process(float inL, float inR, float& outL, float& outR) noexcept
     {
-        // Input: mono sum, highpassed, through 4 modulated allpasses → dense onset
-        float x = loopHP.process(0.5f * (inL + inR));
-        for (int i = 0; i < 4; ++i)
-        {
-            const float d = kInApMs[i] * 0.001f * static_cast<float>(sampleRate) + inLfo[i].next() * 0.0004f * static_cast<float>(sampleRate);
-            x = allpassFrac(inAP[i], x, d, diffusion);
-        }
+        // True stereo input: each side gets its own highpass + 4 modulated allpasses,
+        // then L feeds the even lines and R the odd lines. Images stay where they were.
+        float xs[2] = { loopHP.process(inL), loopHP2.process(inR) };
+        for (int c = 0; c < 2; ++c)
+            for (int i = 0; i < 4; ++i)
+            {
+                const float d = (kInApMs[i] + 0.7f * c) * 0.001f * static_cast<float>(sampleRate)
+                              + inLfo[c][i].next() * 0.0004f * static_cast<float>(sampleRate);
+                xs[c] = allpassFrac(inAP[c][i], xs[c], d, diffusion);
+            }
 
         // Read the lines with slow modulation, then damp
         std::array<float, kLines> v;
@@ -114,14 +120,14 @@ public:
         for (int i = 0; i < kLines; ++i)
         {
             const float g = freeze ? 0.9995f : gain[i];
-            float y = (v[i] - k) * g + (freeze ? 0.0f : x * kInputSign[i] * 0.5f);
+            float y = (v[i] - k) * g + (freeze ? 0.0f : xs[i & 1] * kInputSign[i] * 0.7f);
             if (freeze) y = fastTanh(y);          // only clamp when pinned near unity
             lines[i].write(y);
         }
 
         // Decorrelated taps + output allpasses
-        float l = (v[0] - v[1] + v[2] - v[3] + v[4] - v[5] + v[6] - v[7]) * 0.5f;
-        float r = (v[0] + v[1] - v[2] - v[3] + v[4] + v[5] - v[6] - v[7]) * 0.5f;
+        float l = (v[0] + v[2] - v[4] + v[6]) * 0.55f + (v[1] - v[3] + v[5] - v[7]) * 0.25f;
+        float r = (v[1] + v[3] - v[5] + v[7]) * 0.55f + (v[0] - v[2] + v[4] - v[6]) * 0.25f;
         l = allpassInt(outAP[0][0], l, 311, 0.5f); l = allpassInt(outAP[0][1], l, 467, 0.45f);
         r = allpassInt(outAP[1][0], r, 353, 0.5f); r = allpassInt(outAP[1][1], r, 419, 0.45f);
         outL = l; outR = r;
@@ -162,13 +168,13 @@ private:
     float size = 0.6f, rt60 = 3.0f, modDepth = 0.0f, diffusion = 0.65f;
     bool  freeze = false;
     std::array<DelayLine, kLines> lines;
-    std::array<DelayLine, 4>      inAP;
+    DelayLine                     inAP[2][4];
     DelayLine                     outAP[2][2];
     std::array<OnePole, kLines>   damp, lineHP;
     std::array<LFO, kLines>       lfo;
-    std::array<LFO, 4>            inLfo;
+    LFO                           inLfo[2][4];
     std::array<float, kLines>     baseDelay {}, gain {};
-    OnePole loopHP;
+    OnePole loopHP, loopHP2;
 };
 
 } // namespace zw

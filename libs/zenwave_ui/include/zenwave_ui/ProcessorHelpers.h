@@ -102,3 +102,33 @@ private:
 };
 
 } // namespace zwui
+
+namespace zwui {
+
+// Lock-free sample tap: the processor pushes (mono-summed) samples, the editor pulls
+// a block and runs an FFT. Fixed 2048-point window.
+class SpectrumTap
+{
+public:
+    static constexpr int kSize = 2048;
+    void push(const juce::AudioBuffer<float>& b)
+    {
+        const int n = b.getNumSamples();
+        const float* l = b.getReadPointer(0);
+        const float* r = b.getNumChannels() > 1 ? b.getReadPointer(1) : l;
+        int w = writePos.load(std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i) { ring[size_t(w)] = 0.5f * (l[i] + r[i]); w = (w + 1) & (kSize - 1); }
+        writePos.store(w, std::memory_order_release);
+    }
+    // Copies the most recent kSize samples (oldest first)
+    void snapshot(float* out) const
+    {
+        const int w = writePos.load(std::memory_order_acquire);
+        for (int i = 0; i < kSize; ++i) out[i] = ring[size_t((w + i) & (kSize - 1))];
+    }
+private:
+    std::array<float, kSize> ring {};
+    std::atomic<int> writePos { 0 };
+};
+
+} // namespace zwui

@@ -29,6 +29,11 @@ DriftAudioProcessor::DriftAudioProcessor()
     pWobbleSync = apvts.getRawParameterValue(ParamIDs::wobbleSync);
     pWobbleDiv  = apvts.getRawParameterValue(ParamIDs::wobbleDiv);
     pWobbleRate = apvts.getRawParameterValue(ParamIDs::wobbleRate);
+    pLowCut = apvts.getRawParameterValue(ParamIDs::lowCut);
+    pHighCut = apvts.getRawParameterValue(ParamIDs::highCut);
+    pLowSlope = apvts.getRawParameterValue(ParamIDs::lowSlope);
+    pHighSlope = apvts.getRawParameterValue(ParamIDs::highSlope);
+    pTilt = apvts.getRawParameterValue(ParamIDs::tilt);
 }
 
 APVTS::ParameterLayout DriftAudioProcessor::createLayout()
@@ -83,11 +88,20 @@ APVTS::ParameterLayout DriftAudioProcessor::createLayout()
         Rng{ -24.0f, 12.0f, 0.1f }, 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
             [](float v, int) { return juce::String(v, 1) + " dB"; })));
+    auto hzAttr = juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+        [](float v, int) { return v >= 1000.0f ? juce::String(v / 1000.0f, 1) + " kHz" : juce::String(juce::roundToInt(v)) + " Hz"; });
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::lowCut, 1 }, "Low Cut", Rng{ 20.0f, 2000.0f, 0.1f, 0.35f }, 20.0f, hzAttr));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::highCut, 1 }, "High Cut", Rng{ 1000.0f, 20000.0f, 1.0f, 0.5f }, 20000.0f, hzAttr));
+    params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::lowSlope, 1 }, "Low Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
+    params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::highSlope, 1 }, "High Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::tilt, 1 }, "Tilt", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
     return { params.begin(), params.end() };
 }
 
 void DriftAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
     monoScratch.setSize(1, samplesPerBlock);
     power.prepare(sampleRate, samplesPerBlock, 2);
@@ -127,6 +141,9 @@ void DriftAudioProcessor::updateEngineParams()
     p.wobbleHz   = pWobbleSync->load() > 0.5f
                      ? float(1.0 / zwui::divisionSeconds(int(pWobbleDiv->load()), hostBpm))
                      : pWobbleRate->load();
+    p.lowCutHz  = pLowCut->load();  p.highCutHz = pHighCut->load();
+    p.lowSlope  = int(pLowSlope->load()); p.highSlope = int(pHighSlope->load());
+    p.tilt      = pTilt->load();
     engine.setParams(p);
 }
 
@@ -158,6 +175,7 @@ void DriftAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
+    spectrum.push(buffer);
 }
 
 void DriftAudioProcessor::setCurrentProgram(int index)

@@ -22,6 +22,10 @@ private:
 
     zwui::Knob time, feedback, wobble, age, space, mix;          // macro row
     zwui::Knob size, decay, width, spread, output, wobbleRate;   // deep row
+    zwui::Knob lowCut, highCut, tilt;                              // tone
+    juce::ComboBox lowSlopeBox, highSlopeBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;
+    zwui::SpectrumAnalyser analyser;
 
     juce::ToggleButton syncButton { "SYNC" }, pingPongButton { "PING-PONG" }, freezeButton { "FREEZE" },
                        wobbleSyncButton { "SYNC" }, powerButton;

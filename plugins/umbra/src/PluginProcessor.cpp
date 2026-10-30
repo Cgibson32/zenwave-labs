@@ -3,10 +3,11 @@
 
 using APVTS = juce::AudioProcessorValueTreeState;
 
-static const char* kIds[17] = {
+static const char* kIds[22] = {
     ParamIDs::preDelay, ParamIDs::size, ParamIDs::decay, ParamIDs::dark, ParamIDs::density, ParamIDs::motion,
     ParamIDs::gravity, ParamIDs::early, ParamIDs::duck, ParamIDs::width, ParamIDs::mix, ParamIDs::output, ParamIDs::freeze,
-    ParamIDs::power, ParamIDs::motionSync, ParamIDs::motionDiv, ParamIDs::motionRate
+    ParamIDs::power, ParamIDs::motionSync, ParamIDs::motionDiv, ParamIDs::motionRate,
+    ParamIDs::lowCut, ParamIDs::highCut, ParamIDs::lowSlope, ParamIDs::highSlope, ParamIDs::tilt
 };
 
 UmbraAudioProcessor::UmbraAudioProcessor()
@@ -15,7 +16,7 @@ UmbraAudioProcessor::UmbraAudioProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMS", createLayout())
 {
-    for (int i = 0; i < 17; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
+    for (int i = 0; i < 22; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
 }
 
 APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
@@ -58,11 +59,20 @@ APVTS::ParameterLayout UmbraAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::motionRate, 1 }, "Motion Rate",
         Rng{ 0.1f, 4.0f, 0.001f, 0.5f }, 1.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(v, 2) + "x"; })));
+    auto hzAttr = juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+        [](float v, int) { return v >= 1000.0f ? juce::String(v / 1000.0f, 1) + " kHz" : juce::String(juce::roundToInt(v)) + " Hz"; });
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::lowCut, 1 }, "Low Cut", Rng{ 20.0f, 2000.0f, 0.1f, 0.35f }, 20.0f, hzAttr));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::highCut, 1 }, "High Cut", Rng{ 1000.0f, 20000.0f, 1.0f, 0.5f }, 20000.0f, hzAttr));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{ ParamIDs::lowSlope, 1 }, "Low Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{ ParamIDs::highSlope, 1 }, "High Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::tilt, 1 }, "Tilt", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v * 6.0f, 1) + " dB"; })));
     return { params.begin(), params.end() };
 }
 
 void UmbraAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    currentSampleRate = sampleRate;
     engine.prepare(sampleRate, samplesPerBlock);
     power.prepare(sampleRate, samplesPerBlock, 2);
     meterIn.prepare(sampleRate); meterOut.prepare(sampleRate);
@@ -88,6 +98,8 @@ void UmbraAudioProcessor::updateEngineParams()
     u.motionRate = p[14]->load() > 0.5f
                      ? float((1.0 / zwui::divisionSeconds(int(p[15]->load()), hostBpm)) / 0.09)
                      : p[16]->load();
+    u.lowCutHz = p[17]->load(); u.highCutHz = p[18]->load();
+    u.lowSlope = int(p[19]->load()); u.highSlope = int(p[20]->load()); u.tilt = p[21]->load();
     engine.setParams(u);
 }
 
@@ -110,6 +122,7 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     else if (numOut == 1) engine.processMono(buffer.getWritePointer(0), n);
     power.end(buffer);
     meterOut.push(buffer, motion.levelOut);
+    spectrum.push(buffer);
 }
 
 void UmbraAudioProcessor::setCurrentProgram(int index)

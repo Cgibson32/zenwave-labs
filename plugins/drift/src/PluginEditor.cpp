@@ -18,6 +18,12 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     spread.init    (*this, processor.apvts, ParamIDs::spread,     "SPREAD", false);
     wobbleRate.init(*this, processor.apvts, ParamIDs::wobbleRate, "WOBBLE RATE", false);
     output.init    (*this, processor.apvts, ParamIDs::output,     "OUTPUT", false);
+    lowCut.init    (*this, processor.apvts, ParamIDs::lowCut,     "LOW CUT",  false);
+    highCut.init   (*this, processor.apvts, ParamIDs::highCut,    "HIGH CUT", false);
+    tilt.init      (*this, processor.apvts, ParamIDs::tilt,       "TILT",     false);
+    for (auto* box : { &lowSlopeBox, &highSlopeBox }) { addAndMakeVisible(box); box->addItemList({ "6 dB", "12 dB", "24 dB", "48 dB" }, 1); }
+    lowSlopeAttach  = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, ParamIDs::lowSlope, lowSlopeBox);
+    highSlopeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.apvts, ParamIDs::highSlope, highSlopeBox);
 
     for (auto* b : { &syncButton, &pingPongButton, &freezeButton, &wobbleSyncButton, &powerButton }) addAndMakeVisible(b);
     powerButton.getProperties().set("round", true);
@@ -39,9 +45,9 @@ DriftAudioProcessorEditor::DriftAudioProcessorEditor(DriftAudioProcessor& p)
     };
 
     setResizable(true, true);
-    setResizeLimits(720, 450, 1440, 900);
-    getConstrainer()->setFixedAspectRatio(1.6);
-    setSize(880, 550);
+    setResizeLimits(704, 528, 1408, 1056);
+    getConstrainer()->setFixedAspectRatio(880.0 / 660.0);
+    setSize(880, 660);
     lastTick = juce::Time::getMillisecondCounterHiRes();
     startTimerHz(30);
 }
@@ -69,6 +75,7 @@ void DriftAudioProcessorEditor::timerCallback()
     lastTick = now;
     stage.tick(processor.motion, dt);
     lnf.pulse = processor.motion.pulse;
+    analyser.update(processor.spectrum, processor.currentSampleRate);
 
     if (processor.getCurrentProgram() != lastPreset)
     {
@@ -95,8 +102,11 @@ void DriftAudioProcessorEditor::paint(juce::Graphics& g)
     stage.render(g, getLocalBounds(), lnf.accent, lnf.accent2, processor.motion, 42);
     zwui::drawHeader(g, r, s, "DRIFT", "LO-FI SPACE ECHO", lnf.accent, lnf.accentHi, lnf.accent2);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 84 * s, 836 * s, 262 * s), "ECHO", lnf.accent, lnf.accent2, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 358 * s, 836 * s, 170 * s), "DEEP SPACE", lnf.accent2, lnf.accent, s);
-    // Orbit visualizer in the header, reacting to the wet output
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 358 * s, 836 * s, 160 * s), "DEEP SPACE", lnf.accent2, lnf.accent, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 530 * s, 836 * s, 118 * s), "FIELD", lnf.accent, lnf.accent2, s);
+    zwui::EqCurve eq { lowCut.slider.getValue() > 0 ? float(lowCut.slider.getValue()) : 20.0f, float(highCut.slider.getValue()),
+                       juce::jmax(0, lowSlopeBox.getSelectedId() - 1), juce::jmax(0, highSlopeBox.getSelectedId() - 1), float(tilt.slider.getValue()) };
+    zwui::drawEqField(g, juce::Rectangle<float>(40 * s, 548 * s, 470 * s, 90 * s), analyser, eq, lnf.accent, lnf.accent2, processor.motion.pulse);
     zwui::drawOrbit(g, { 470 * s, 44 * s }, 26 * s, processor.motion, lnf.accent, lnf.accent2);
 }
 
@@ -122,5 +132,12 @@ void DriftAudioProcessorEditor::resized()
 
     zwui::Knob* smalls[] = { &size, &decay, &width, &spread, &wobbleRate, &output };
     x = S(50);
-    for (auto* k : smalls) { k->layout(x, S(396), S(104), S(116), S(14)); x += S(132); }
+    for (auto* k : smalls) { k->layout(x, S(392), S(104), S(110), S(14)); x += S(132); }
+
+    // Tone: field display on the left, cuts + tilt on the right
+    zwui::Knob* tone[] = { &lowCut, &highCut, &tilt };
+    x = S(530);
+    for (auto* k : tone) { k->layout(x, S(560), S(84), S(70), S(12)); x += S(100); }
+    lowSlopeBox.setBounds(S(538), S(632), S(68), S(16));
+    highSlopeBox.setBounds(S(638), S(632), S(68), S(16));
 }

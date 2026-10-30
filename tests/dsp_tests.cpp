@@ -109,6 +109,56 @@ int main()
         CHECK(subRms > 0.30f && subRms < 0.40f, "Umbra Gravity keeps a 35 Hz sub essentially dry (RMS ~0.35)");
     }
 
+
+    // --- CutFilter: slope accuracy one octave past cutoff --------------------------
+    {
+        auto measure = [&](zw::CutFilter::Slope sl, float hz) {
+            zw::CutFilter f; f.setSampleRate(sr); f.setType(zw::CutFilter::Type::Highcut); f.setSlope(sl); f.setCutoff(1000.0f);
+            double acc = 0; int n = 0;
+            for (int i = 0; i < 48000; ++i) { float y = f.process(std::sin(2 * zw::kPi * hz * i / float(sr))); if (i > 8000) { acc += y * y; ++n; } }
+            return 10.0 * std::log10(acc / n / 0.5);
+        };
+        const double a6 = measure(zw::CutFilter::Slope::dB6, 4000.0f), a12 = measure(zw::CutFilter::Slope::dB12, 4000.0f),
+                     a24 = measure(zw::CutFilter::Slope::dB24, 4000.0f), a48 = measure(zw::CutFilter::Slope::dB48, 4000.0f);
+        std::printf("      highcut @1k, measured 2 octaves up: 6:%.1f 12:%.1f 24:%.1f 48:%.1f dB\n", a6, a12, a24, a48);
+        CHECK(std::fabs(a6 + 12.3) < 2.5,  "CutFilter 6 dB/oct ≈ -12 dB two octaves up");
+        CHECK(std::fabs(a12 + 24.1) < 3.0, "CutFilter 12 dB/oct ≈ -24 dB two octaves up");
+        CHECK(std::fabs(a24 + 48.2) < 4.0, "CutFilter 24 dB/oct ≈ -48 dB two octaves up");
+        CHECK(a48 < -80.0,                 "CutFilter 48 dB/oct < -80 dB two octaves up");
+        const double pass = measure(zw::CutFilter::Slope::dB48, 200.0f);
+        CHECK(std::fabs(pass) < 0.5, "CutFilter passband flat (48 dB/oct, 200 Hz within ±0.5 dB)");
+    }
+
+    // --- Oversampled saturator: alias rejection ------------------------------------
+    {
+        auto aliasAt = [&](int os) {
+            zw::Saturator sat; sat.setSampleRate(sr); sat.setDrive(0.5f); sat.setCharacter(zw::Saturator::Character::Tape); sat.setEmphasis(0.0f); sat.setOversampling(os);
+            const int N = 1 << 15; std::vector<float> y(N);
+            for (int i = 0; i < N; ++i) y[i] = sat.process(std::sin(2 * zw::kPi * 9000.0f * i / float(sr)));
+            // 5th harmonic = 45 kHz → aliases to 3 kHz at 48 kHz
+            double re = 0, im = 0; for (int i = N / 2; i < N; ++i) { re += y[i] * std::cos(2 * zw::kPi * 3000.0f * i / float(sr)); im += y[i] * std::sin(2 * zw::kPi * 3000.0f * i / float(sr)); }
+            return 20.0 * std::log10(std::sqrt(re * re + im * im) / (N / 2) + 1e-12);
+        };
+        const double direct = aliasAt(1), over2 = aliasAt(2), over4 = aliasAt(4);
+        std::printf("      3 kHz alias product: direct %.1f dB, 2x %.1f dB, 4x %.1f dB\n", direct, over2, over4);
+        CHECK(over4 < direct - 15.0, "4x oversampled saturator cuts alias products by > 15 dB");
+    }
+
+    // --- True-stereo reverb: left-only input stays left-weighted early ------------
+    {
+        zw::SpaceReverb r; r.prepare(sr); r.setDecay(0.5f);
+        double eL = 0, eR = 0;
+        for (int i = 0; i < int(sr * 0.25); ++i)
+        {
+            float a = 0, b = 0;
+            const float in = (i < 400) ? std::sin(2 * zw::kPi * 500.0f * i / float(sr)) : 0.0f;
+            r.process(in, 0.0f, a, b);
+            if (i > 400 && i < int(sr * 0.08)) { eL += a * a; eR += b * b; }
+        }
+        std::printf("      early energy L/R ratio: %.1f dB\n", 10 * std::log10(eL / (eR + 1e-12)));
+        CHECK(eL > eR * 1.5, "True-stereo reverb keeps a left-only source left-weighted in the early tail");
+    }
+
     // --- DelayLine: fractional read is accurate for a ramp -------------------------
     {
         zw::DelayLine dl; dl.prepare(sr, 0.1f);

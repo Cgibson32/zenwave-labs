@@ -30,7 +30,12 @@ struct UmbraParams
     float mix        = 0.3f;    // 0..1
     float output     = 0.0f;    // dB
     bool  freeze     = false;
-    float motionRate = 1.0f;    // multiplier on the reverb LFO rates (free or tempo-derived)
+    float motionRate = 1.0f;    // multiplier on the reverb LFO rates (free or tempo-derived)    // Wet-path EQ
+    float lowCutHz   = 20.0f;   // 20..2000
+    float highCutHz  = 20000.0f;// 1000..20000
+    int   lowSlope   = 1;       // 0=6, 1=12, 2=24, 3=48 dB/oct
+    int   highSlope  = 1;
+    float tilt       = 0.0f;    // -1..1 (dark..bright)
 };
 
 class UmbraEngine
@@ -40,6 +45,12 @@ public:
     {
         sampleRate = sr;
         reverb.prepare(sr);
+        for (int c = 0; c < 2; ++c)
+        {
+            lowCut[c].setSampleRate(sr);  lowCut[c].setType(CutFilter::Type::Lowcut);
+            highCut[c].setSampleRate(sr); highCut[c].setType(CutFilter::Type::Highcut);
+            tiltEq[c].setSampleRate(sr);
+        }
         for (int c = 0; c < 2; ++c)
         {
             pre[c].prepare(sr, 0.3f);
@@ -91,7 +102,14 @@ public:
         smEarly.setTarget(p.early);
         duckAmount = p.duck;
         duckAttack  = 1.0f - std::exp(-1.0f / (0.005f * float(sampleRate)));
-        duckRelease = 1.0f - std::exp(-1.0f / (0.25f  * float(sampleRate)));
+        duckRelease = 1.0f - std::exp(-1.0f / (0.25f  * float(sampleRate)));        for (int c = 0; c < 2; ++c)
+        {
+            lowCut[c].setSlope(static_cast<CutFilter::Slope>(clampi(p.lowSlope, 0, 3)));
+            highCut[c].setSlope(static_cast<CutFilter::Slope>(clampi(p.highSlope, 0, 3)));
+            lowCut[c].setCutoff(p.lowCutHz);
+            highCut[c].setCutoff(p.highCutHz);
+            tiltEq[c].setTilt(p.tilt);
+        }
     }
 
     void process(float* L, float* R, int n) noexcept
@@ -138,6 +156,10 @@ public:
             const float duckGain = 1.0f - duckAmount * std::min(1.0f, duckEnv * 2.5f);
             wetL *= duckGain; wetR *= duckGain;
 
+            // Wet EQ: cuts + tilt
+            wetL = tiltEq[0].process(highCut[0].process(lowCut[0].process(wetL)));
+            wetR = tiltEq[1].process(highCut[1].process(lowCut[1].process(wetR)));
+
             // Width
             const float mid = 0.5f * (wetL + wetR), side = 0.5f * (wetL - wetR) * wid;
             wetL = mid + side; wetR = mid - side;
@@ -176,6 +198,8 @@ private:
     OnePole tiltLP[2], tiltHP[2];
     float tiltAmount = 0.5f;
     float duckAmount = 0.0f, duckEnv = 0.0f, duckAttack = 0.01f, duckRelease = 0.0001f;
+    CutFilter lowCut[2], highCut[2];
+    TiltEQ tiltEq[2];
     Smoother smMix, smOut, smWidth, smPre, smEarly;
     float scratch[8192] {};
 };

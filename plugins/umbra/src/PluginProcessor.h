@@ -23,6 +23,11 @@ namespace ParamIDs
     inline constexpr auto motionSync = "motionsync";
     inline constexpr auto motionDiv  = "motiondiv";
     inline constexpr auto motionRate = "motionrate";
+    inline constexpr auto lowCut     = "lowcut";
+    inline constexpr auto highCut    = "highcut";
+    inline constexpr auto lowSlope   = "lowslope";
+    inline constexpr auto highSlope  = "highslope";
+    inline constexpr auto tilt       = "tilt";
 }
 
 class UmbraAudioProcessor : public juce::AudioProcessor
@@ -56,6 +61,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     zwui::Motion motion;
+    zwui::SpectrumTap spectrum;
+    double currentSampleRate = 48000.0;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -66,7 +73,7 @@ private:
     zwui::Meter meterIn, meterOut;
     int currentPreset = 0;
     double hostBpm = 120.0;
-    std::atomic<float>* p[17] {};
+    std::atomic<float>* p[22] {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UmbraAudioProcessor)
 };

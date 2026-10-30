@@ -11,6 +11,7 @@ constexpr float kPi    = 3.14159265358979323846f;
 constexpr float kTwoPi = 6.28318530717958647692f;
 
 inline float clampf(float v, float lo, float hi) noexcept { return v < lo ? lo : (v > hi ? hi : v); }
+inline int   clampi(int v, int lo, int hi) noexcept { return v < lo ? lo : (v > hi ? hi : v); }
 inline float lerp(float a, float b, float t) noexcept { return a + (b - a) * t; }
 
 inline float dbToGain(float dB) noexcept { return std::pow(10.0f, dB * 0.05f); }

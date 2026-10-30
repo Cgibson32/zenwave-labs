@@ -21,7 +21,9 @@ public:
         reset();
     }
 
-    void reset() noexcept { dc.reset(); preEmphasis.reset(); }
+    void reset() noexcept { dc.reset(); preEmphasis.reset(); os2.reset(); os4.reset(); }
+    // factor: 1, 2 or 4
+    void setOversampling(int factor) noexcept { osFactor = factor >= 4 ? 4 : (factor >= 2 ? 2 : 1); }
 
     // drive: 0..1 (maps to 0..+24 dB), bias: -1..1, character selects the curve
     void setDrive(float d) noexcept
@@ -39,14 +41,21 @@ public:
     {
         // Tape pre-emphasis: a little HF lift before the curve, undone after
         const float hf = preEmphasis.process(x);
-        float v = (x + hf * emphasis * 0.5f) * gain + bias;
+        const float pre = (x + hf * emphasis * 0.5f) * gain + bias;
 
-        switch (character)
+        float v;
+        if (osFactor == 4)
         {
-            case Character::Tape: v = fastTanh(v); break;
-            case Character::Tube: v = tube(v);     break;
-            case Character::Hard: v = hard(v);     break;
+            float y[4]; os4.upsample(pre, y);
+            for (float& q : y) q = curve(q);
+            v = os4.downsample(y);
         }
+        else if (osFactor == 2)
+        {
+            float a, b; os2.upsample(pre, a, b);
+            v = os2.downsample(curve(a), curve(b));
+        }
+        else v = curve(pre);
 
         v -= hf * emphasis * 0.5f * std::min(gain, 1.0f);  // de-emphasis (approx.)
         v  = dc.process(v);
@@ -54,6 +63,16 @@ public:
     }
 
 private:
+    float curve(float v) const noexcept
+    {
+        switch (character)
+        {
+            case Character::Tape: return fastTanh(v);
+            case Character::Tube: return tube(v);
+            case Character::Hard: return hard(v);
+        }
+        return v;
+    }
     static float tube(float v) noexcept
     {
         // Asymmetric: softer on positive swing, harder on negative
@@ -68,8 +87,11 @@ private:
 
     float drive = 0.0f, gain = 1.0f, makeup = 1.0f, bias = 0.0f, emphasis = 0.3f;
     Character character = Character::Tape;
+    int osFactor = 4;
     DCBlocker dc;
     OnePole   preEmphasis;
+    Oversampler2x os2;
+    Oversampler4x os4;
 };
 
 } // namespace zw

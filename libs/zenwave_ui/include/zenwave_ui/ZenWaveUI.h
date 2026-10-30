@@ -484,3 +484,105 @@ private:
 };
 
 } // namespace zwui
+
+#include <juce_dsp/juce_dsp.h>
+
+namespace zwui {
+
+// Editor-side analyser: FFT with smoothing, log-frequency bins ready to draw.
+class SpectrumAnalyser
+{
+public:
+    static constexpr int kOrder = 11, kSize = 1 << kOrder, kBins = 96;
+    SpectrumAnalyser() : fft(kOrder), window(kSize, juce::dsp::WindowingFunction<float>::hann) { levels.fill(0.0f); }
+
+    template <class Tap> void update(const Tap& tap, double sampleRate)
+    {
+        tap.snapshot(buf.data());
+        window.multiplyWithWindowingTable(buf.data(), kSize);
+        std::fill(fftData.begin(), fftData.end(), 0.0f);
+        std::copy(buf.begin(), buf.end(), fftData.begin());
+        fft.performFrequencyOnlyForwardTransform(fftData.data());
+        for (int b = 0; b < kBins; ++b)
+        {
+            const float f0 = freqForBin(b), f1 = freqForBin(b + 1);
+            int i0 = juce::jlimit(1, kSize / 2 - 1, int(f0 / sampleRate * kSize)), i1 = juce::jlimit(i0 + 1, kSize / 2, int(f1 / sampleRate * kSize) + 1);
+            float pk = 0.0f; for (int i = i0; i < i1; ++i) pk = juce::jmax(pk, fftData[size_t(i)]);
+            const float db = juce::Decibels::gainToDecibels(pk / (kSize * 0.25f) + 1e-9f);
+            const float norm = juce::jlimit(0.0f, 1.0f, (db + 78.0f) / 78.0f);
+            levels[size_t(b)] = norm > levels[size_t(b)] ? norm : levels[size_t(b)] * 0.86f + norm * 0.14f;
+        }
+    }
+    static float freqForBin(int b) { return 20.0f * std::pow(1000.0f, float(b) / kBins); }   // 20 Hz .. 20 kHz
+    std::array<float, kBins> levels;
+private:
+    juce::dsp::FFT fft;
+    juce::dsp::WindowingFunction<float> window;
+    std::array<float, kSize> buf {};
+    std::array<float, kSize * 2> fftData {};
+};
+
+struct EqCurve { float lowCutHz, highCutHz; int lowSlope, highSlope; float tilt; };
+
+// The "field": log-frequency spectrum of the wet signal with the EQ response drawn over it.
+inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const SpectrumAnalyser& an, const EqCurve& eq,
+                        juce::Colour accent, juce::Colour accent2, float pulse)
+{
+    auto xFor = [&](float hz) { return r.getX() + r.getWidth() * std::log(hz / 20.0f) / std::log(1000.0f); };
+    auto yForDb = [&](float db) { return r.getCentreY() - db / 24.0f * r.getHeight() * 0.5f; };  // ±24 dB range
+
+    g.setColour(Palette::bg.withAlpha(0.55f));
+    g.fillRoundedRectangle(r, 10.0f);
+    // grid
+    g.setColour(juce::Colours::white.withAlpha(0.06f));
+    for (float hz : { 50.f, 100.f, 200.f, 500.f, 1000.f, 2000.f, 5000.f, 10000.f }) g.drawVerticalLine(int(xFor(hz)), r.getY(), r.getBottom());
+    for (float db : { -12.f, 0.f, 12.f }) g.drawHorizontalLine(int(yForDb(db)), r.getX(), r.getRight());
+    g.setFont(juce::Font(juce::FontOptions(8.5f)));
+    g.setColour(Palette::dim.withAlpha(0.8f));
+    for (auto [hz, t] : std::initializer_list<std::pair<float, const char*>>{ { 100.f, "100" }, { 1000.f, "1k" }, { 10000.f, "10k" } })
+        g.drawText(t, int(xFor(hz)) + 3, int(r.getBottom()) - 13, 30, 12, juce::Justification::left);
+
+    // spectrum fill
+    juce::Path spec;
+    spec.startNewSubPath(r.getX(), r.getBottom());
+    for (int b = 0; b < SpectrumAnalyser::kBins; ++b)
+    {
+        const float x = r.getX() + r.getWidth() * float(b) / (SpectrumAnalyser::kBins - 1);
+        const float y = r.getBottom() - an.levels[size_t(b)] * r.getHeight() * 0.92f;
+        if (b == 0) spec.lineTo(x, y); else spec.lineTo(x, y);
+    }
+    spec.lineTo(r.getRight(), r.getBottom()); spec.closeSubPath();
+    g.setGradientFill(juce::ColourGradient(accent2.withAlpha(0.45f + 0.15f * pulse), r.getX(), r.getY(), accent.withAlpha(0.05f), r.getX(), r.getBottom(), false));
+    g.fillPath(spec);
+    g.setColour(accent2.withAlpha(0.8f));
+    g.strokePath(spec, juce::PathStrokeType(1.2f));
+
+    // EQ response
+    juce::Path curve; bool first = true;
+    for (int i = 0; i <= 160; ++i)
+    {
+        const float hz = 20.0f * std::pow(1000.0f, float(i) / 160.0f);
+        const int nLow = 1 << eq.lowSlope, nHigh = 1 << eq.highSlope;                 // order: 1,2,4,8
+        const float hpMag = 1.0f / std::sqrt(1.0f + std::pow(eq.lowCutHz / hz, 2.0f * nLow));
+        const float lpMag = 1.0f / std::sqrt(1.0f + std::pow(hz / eq.highCutHz, 2.0f * nHigh));
+        const float tiltDb = eq.tilt * 6.0f * std::tanh(std::log(hz / 1000.0f) * 0.9f);
+        const float db = juce::Decibels::gainToDecibels(hpMag * lpMag + 1e-6f) + tiltDb;
+        const float x = xFor(hz), y = juce::jlimit(r.getY(), r.getBottom(), yForDb(db));
+        if (first) { curve.startNewSubPath(x, y); first = false; } else curve.lineTo(x, y);
+    }
+    glowStroke(g, curve, juce::Colours::white.interpolatedWith(accent, 0.25f), 2.0f, 1.0f + pulse * 0.5f);
+
+    // cutoff markers
+    for (float hz : { eq.lowCutHz, eq.highCutHz })
+    {
+        const float x = xFor(juce::jlimit(20.0f, 20000.0f, hz));
+        g.setColour(accent.withAlpha(0.6f));
+        g.drawVerticalLine(int(x), r.getY() + 4.0f, r.getBottom() - 4.0f);
+        g.setColour(juce::Colours::white);
+        g.fillEllipse(x - 3.0f, yForDb(-3.0f) - 3.0f, 6.0f, 6.0f);
+    }
+    g.setColour(accent.withAlpha(0.5f));
+    g.drawRoundedRectangle(r, 10.0f, 1.0f);
+}
+
+} // namespace zwui

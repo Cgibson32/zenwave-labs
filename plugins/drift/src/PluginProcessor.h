@@ -25,6 +25,11 @@ namespace ParamIDs
     inline constexpr auto wobbleSync = "wobblesync";
     inline constexpr auto wobbleDiv  = "wobblediv";
     inline constexpr auto wobbleRate = "wobblerate";
+    inline constexpr auto lowCut     = "lowcut";
+    inline constexpr auto highCut    = "highcut";
+    inline constexpr auto lowSlope   = "lowslope";
+    inline constexpr auto highSlope  = "highslope";
+    inline constexpr auto tilt       = "tilt";
 }
 
 class DriftAudioProcessor : public juce::AudioProcessor
@@ -58,6 +63,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     zwui::Motion motion;
+    zwui::SpectrumTap spectrum;
+    double currentSampleRate = 48000.0;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -73,7 +80,8 @@ private:
 
     std::atomic<float>* pTime{}, * pSync{}, * pDivision{}, * pFeedback{}, * pWow{}, * pAge{}, * pSpace{},
                       * pSize{}, * pDecay{}, * pWidth{}, * pSpread{}, * pPingPong{}, * pFreeze{}, * pMix{}, * pOutput{},
-                      * pPower{}, * pWobbleSync{}, * pWobbleDiv{}, * pWobbleRate{};
+                      * pPower{}, * pWobbleSync{}, * pWobbleDiv{}, * pWobbleRate{},
+                      * pLowCut{}, * pHighCut{}, * pLowSlope{}, * pHighSlope{}, * pTilt{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DriftAudioProcessor)
 };
