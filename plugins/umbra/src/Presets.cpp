@@ -8,6 +8,13 @@ namespace Presets
     static const Preset kPresets[] = {
         { "Init",                    "Init",     20.0f, 0.65f, 0.60f, 0.50f, 0.60f, 0.30f, 0.40f, 0.30f, 0.00f, 1.00f, 0.30f, 0.0f, false },
 
+        // --- Signature ---
+        { "Drop-Safe Hall",          "Signature",24.0f, 0.70f, 0.55f, 0.55f, 0.75f, 0.30f, 0.55f, 0.30f, 0.40f, 1.10f, 0.28f, 0.0f, false },
+        { "Vocal Cathedral",         "Signature",40.0f, 0.90f, 0.80f, 0.50f, 0.80f, 0.35f, 0.50f, 0.20f, 0.60f, 1.20f, 0.30f, 0.0f, false },
+        { "Snare Shadow",            "Signature", 4.0f, 0.45f, 0.35f, 0.70f, 0.90f, 0.15f, 0.60f, 0.60f, 0.30f, 1.00f, 0.25f, 0.0f, false },
+        { "Infinite Choir",          "Signature",30.0f, 1.00f, 0.95f, 0.35f, 0.70f, 0.50f, 0.50f, 0.10f, 0.00f, 1.30f, 0.45f, 0.0f, false },
+        { "Black Sun",               "Signature",60.0f, 0.95f, 0.90f, 1.00f, 0.55f, 0.45f, 0.45f, 0.10f, 0.20f, 1.40f, 0.50f, 0.0f, false },
+
         // --- Bass music (designed so the sub never gets touched) ---
         { "Sub-Safe Drop Room",      "Bass",     12.0f, 0.45f, 0.40f, 0.55f, 0.70f, 0.20f, 0.55f, 0.40f, 0.35f, 1.00f, 0.22f, 0.0f, false },
         { "Growl Shadow",            "Bass",     18.0f, 0.55f, 0.50f, 0.70f, 0.65f, 0.25f, 0.60f, 0.25f, 0.45f, 1.10f, 0.28f, 0.0f, false },
@@ -81,7 +88,17 @@ namespace Presets
         const juce::String n(p.name);
         setParam(apvts, ParamIDs::bloom, (n == "Umbra (Signature)" || n == "Pre-Drop Black Hole" || n == "Impact Bloom") ? 0.6f : (n == "Halftime Cathedral" ? 0.35f : 0.0f));
 
-        setParam(apvts, ParamIDs::shimmer, (n == "Pad Bed" || n == "Freeze: Void Pad" || n == "Collapsed Star") ? 1.0f : 0.0f);
+        setParam(apvts, ParamIDs::shimmer, (n == "Pad Bed" || n == "Freeze: Void Pad" || n == "Collapsed Star" || n == "Infinite Choir") ? 1.0f : 0.0f);
+        auto eq = [&](float lc, int ls, float hc, int hs, float tl) { setParam(apvts, ParamIDs::lowCut, lc); setParam(apvts, ParamIDs::lowSlope, float(ls)); setParam(apvts, ParamIDs::highCut, hc); setParam(apvts, ParamIDs::highSlope, float(hs)); setParam(apvts, ParamIDs::tilt, tl); };
+        if (n == "Drop-Safe Hall")   { eq(120.0f, 2, 7000.0f, 1, -0.1f); setParam(apvts, ParamIDs::bloom, 0.30f); }
+        if (n == "Vocal Cathedral")  { eq(200.0f, 2, 9000.0f, 1, 0.0f);  setParam(apvts, ParamIDs::bloom, 0.25f);
+                                       zwui::setEnv(apvts, 5.0f, 300.0f, 0.4f, 500.0f); zwui::setModSlot(apvts, 0, 3, 3, 0.20f); }      // phrases open the decay
+        if (n == "Snare Shadow")     { eq(140.0f, 2, 5000.0f, 1, -0.2f); }
+        if (n == "Infinite Choir")   { eq(160.0f, 2, 12000.0f, 1, 0.1f); setParam(apvts, ParamIDs::bloom, 0.50f); setParam(apvts, zwui::FreezeQuantizer::paramId, 2.0f);
+                                       zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 2, 4, 0.15f); zwui::setModSlot(apvts, 1, 2, 10, 0.10f); }
+        if (n == "Black Sun")        { eq(90.0f, 2, 6000.0f, 1, -0.3f);  setParam(apvts, ParamIDs::bloom, 0.60f);
+                                       zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 10, 0.20f);
+                                       zwui::setEnv(apvts, 20.0f, 600.0f, 0.0f, 900.0f); zwui::setModSlot(apvts, 1, 3, 1, 0.25f); }      // hits push the pre-delay back: a breathing space
         setParam(apvts, zwui::FreezeQuantizer::paramId, 0.0f);
         // Factory motion (targets are 1-based: PreDelay=1 Size Decay Dark Density Motion Gravity Early Duck Width Mix MotionRate LowCut HighCut Tilt Bloom=16)
         if (n == "Umbra (Signature)")    { zwui::setLfo(apvts, 0, 6, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 1, 4, 0.15f);  zwui::setModSlot(apvts, 1, 1, 10, 0.12f); }

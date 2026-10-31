@@ -9,6 +9,13 @@ namespace Presets
         // --- Init ---
         { "Init",                      "Init",      380.0f, false, 5, 0.45f, 0.30f, 0.40f, 0.35f, 0.60f, 0.60f, 1.00f,  0.00f, true,  0.35f, 0.0f },
 
+        // --- Signature: engineered end-to-end (EQ, motion, dynamics) ---
+        { "Zero-G Throw",              "Signature",   0.0f, true,  7, 0.55f, 0.22f, 0.50f, 0.45f, 0.70f, 0.65f, 1.20f,  0.10f, true,  1.00f, 0.0f },
+        { "Tape Ghost Vox",            "Signature",   0.0f, true,  8, 0.42f, 0.35f, 0.70f, 0.30f, 0.55f, 0.50f, 1.00f,  0.00f, false, 0.30f, 0.0f },
+        { "Dub Siren Pit",             "Signature", 420.0f, false, 5, 0.78f, 0.30f, 0.60f, 0.60f, 0.85f, 0.80f, 1.30f,  0.15f, true,  0.50f, 0.0f },
+        { "Halftime Haze",             "Signature",   0.0f, true,  9, 0.50f, 0.40f, 0.45f, 0.55f, 0.90f, 0.75f, 1.40f,  0.05f, true,  0.35f, 0.0f },
+        { "Riser Engine",              "Signature", 260.0f, false, 5, 1.02f, 0.30f, 0.55f, 0.50f, 0.80f, 0.70f, 1.50f,  0.20f, true,  0.80f, -4.0f },
+
         // --- Bass / Wonky / Halftime (vocal chops, lead stabs, fills) ---
         { "Wonky Throw",               "Bass",        0.0f, true,  5, 0.42f, 0.35f, 0.55f, 0.30f, 0.50f, 0.55f, 1.10f,  0.10f, true,  0.40f, 0.0f },
         { "Halftime Smear",            "Bass",        0.0f, true,  7, 0.55f, 0.25f, 0.60f, 0.50f, 0.70f, 0.65f, 1.00f,  0.00f, true,  0.45f, 0.0f },
@@ -95,6 +102,23 @@ namespace Presets
         setParam(apvts, zwui::FreezeQuantizer::paramId, 0.0f);
         // Factory motion (targets 1-based: Time=1 Feedback Wobble Age Space Size Decay Width Spread Mix WobbleRate LowCut HighCut Tilt Color=15)
         const juce::String n(p.name);
+        auto eq = [&](float lc, int ls, float hc, int hs, float tl) { setParam(apvts, ParamIDs::lowCut, lc); setParam(apvts, ParamIDs::lowSlope, float(ls)); setParam(apvts, ParamIDs::highCut, hc); setParam(apvts, ParamIDs::highSlope, float(hs)); setParam(apvts, ParamIDs::tilt, tl); };
+        // Signature set
+        if (n == "Zero-G Throw")   { eq(180.0f, 2, 9000.0f, 1, -0.1f); setParam(apvts, ParamIDs::color, -0.2f);
+                                     zwui::setEnv(apvts, 2.0f, 250.0f, 0.0f, 300.0f); zwui::setModSlot(apvts, 0, 3, 2, -0.25f);          // each hit briefly lowers feedback: throws never pile up
+                                     zwui::setLfo(apvts, 1, 6, true, 11, 0.1f);       zwui::setModSlot(apvts, 1, 2, 8, 0.15f); }          // slow drift on width
+        if (n == "Tape Ghost Vox") { eq(250.0f, 1, 6000.0f, 1, -0.2f); setParam(apvts, ParamIDs::color, -0.15f); setParam(apvts, ParamIDs::wobbleRate, 0.3f);
+                                     zwui::setLfo(apvts, 0, 0, true, 10, 0.1f);       zwui::setModSlot(apvts, 0, 1, 11, 0.20f);
+                                     zwui::setEnv(apvts, 5.0f, 120.0f, 1.0f, 400.0f); zwui::setModSlot(apvts, 1, 3, 10, -0.30f); }        // mix ducks while the vocal sings, swells between phrases
+        if (n == "Dub Siren Pit")  { eq(120.0f, 2, 5000.0f, 1, -0.3f); setParam(apvts, ParamIDs::color, -0.5f);
+                                     zwui::setLfo(apvts, 0, 6, true, 12, 0.1f);       zwui::setModSlot(apvts, 0, 1, 1, 0.06f);           // the tape drifts over four bars
+                                     zwui::setLfo(apvts, 1, 0, true, 11, 0.1f);       zwui::setModSlot(apvts, 1, 2, 15, -0.20f); }       // colour breathes darker/lighter
+        if (n == "Halftime Haze")  { eq(150.0f, 2, 8000.0f, 1, 0.0f); setParam(apvts, ParamIDs::color, -0.1f);
+                                     zwui::setEnv(apvts, 10.0f, 400.0f, 0.3f, 600.0f); zwui::setModSlot(apvts, 0, 3, 5, 0.30f);          // hits open the space
+                                     zwui::setLfo(apvts, 1, 6, true, 11, 0.1f);        zwui::setModSlot(apvts, 1, 2, 9, 0.25f); }        // spread wanders
+        if (n == "Riser Engine")   { eq(60.0f, 2, 14000.0f, 1, 0.1f); setParam(apvts, zwui::FreezeQuantizer::paramId, 2.0f);
+                                     zwui::setLfo(apvts, 0, 2, true, 12, 0.1f);       zwui::setModSlot(apvts, 0, 1, 12, 0.60f);          // 4-bar saw sweeps the low cut up
+                                     zwui::setModSlot(apvts, 1, 1, 8, 0.20f);         zwui::setModSlot(apvts, 2, 1, 3, 0.30f); }         // ...and widens / wobbles as it climbs
         if (n == "Nebula Wash")          { zwui::setLfo(apvts, 1, 6, true, 11, 0.1f);  zwui::setModSlot(apvts, 0, 2, 8, 0.25f);  zwui::setModSlot(apvts, 1, 2, 15, -0.20f); }
         if (n == "Alien Transmission")   { zwui::setLfo(apvts, 0, 5, true, 5, 1.0f);   zwui::setLfo(apvts, 1, 0, false, 10, 0.3f);
                                            zwui::setModSlot(apvts, 0, 1, 1, 0.12f);  zwui::setModSlot(apvts, 1, 2, 9, 0.50f); }

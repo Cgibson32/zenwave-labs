@@ -34,7 +34,6 @@ public:
         decay.init(*this, apvts, ModIDs::envDecay, "DEC", false, false);
         sustain.init(*this, apvts, ModIDs::envSustain, "SUS", false, false);
         release.init(*this, apvts, ModIDs::envRelease, "REL", false, false);
-        sens.init(*this, apvts, ModIDs::envSens, "SENS", false, false);
         for (int i = 0; i < ModIDs::kSlots; ++i)
         {
             auto& S = slot[i];
@@ -56,8 +55,7 @@ public:
         attack.slider.setTooltip("Attack: time to reach full after the input opens the gate");
         decay.slider.setTooltip("Decay: time to fall from full to the Sustain level while the input keeps playing");
         sustain.slider.setTooltip("Sustain: the level held while the input keeps playing (100 % = classic follower feel)");
-        release.slider.setTooltip("Release: time to fall to zero after the input stops");
-        sens.slider.setTooltip("Sensitivity: input gain into the gate - turn up until quiet parts trigger, down until only hits do (the bar shows the envelope, the dot shows the gate)");
+        release.slider.setTooltip("Release: time to fall to zero after the input stops. The gate self-adjusts to the input level - the dot shows when it's open.");
         for (auto& S : slot)
         {
             S.src.setTooltip("Modulation source for this slot");
@@ -100,8 +98,8 @@ public:
             L.scope = juce::Rectangle<float>(float(x0), S(62.0f), S(120.0f), S(86.0f));
         }
         const int ex = S(438);
-        Knob* envK[5] = { &attack, &decay, &sustain, &release, &sens };
-        for (int k = 0; k < 5; ++k) envK[k]->layout(ex + S(k * 38), S(84), S(38), S(56), S(11));
+        Knob* envK[4] = { &attack, &decay, &sustain, &release };
+        for (int k = 0; k < 4; ++k) envK[k]->layout(ex + S(k * 47), S(82), S(46), S(60), S(11));
         envMeter = juce::Rectangle<float>(float(ex), S(38.0f), S(188.0f), S(16.0f));
         for (int i = 0; i < ModIDs::kSlots; ++i)
         {
@@ -243,7 +241,7 @@ private:
                    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttach; };
     struct SlotUI { juce::ComboBox src, dst; Knob amt; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> srcAttach, dstAttach; };
     LfoUI lfo[2]; SlotUI slot[ModIDs::kSlots];
-    Knob attack, decay, sustain, release, sens;
+    Knob attack, decay, sustain, release;
     juce::Rectangle<float> envMeter;
     ModMatrix& mod; LookAndFeel& lnf; juce::AudioProcessorValueTreeState& state;
     int editing = -1; float sc = 1.0f;

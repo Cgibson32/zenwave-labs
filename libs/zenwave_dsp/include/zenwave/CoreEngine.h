@@ -102,18 +102,13 @@ public:
     }
     void reset() noexcept { os.reset(); dc.reset(); pres.reset(); bpPre.reset(); bpPost.reset(); bpPre2.reset(); bpPost2.reset(); }
     void set(int character, float drive, float heat) noexcept { ch = character; d = drive; h = heat; }
+    // Targets only; the filters glide there (log-domain, ~12 ms) inside process() so modulated TUNE never clicks
     void setResonance(float hz, float amount, float hz2 = 0.0f) noexcept
     {
-        resAmt = amount * amount * 6.0f;                    // up to +17 dB of peak into the shaper
-        const float q = 0.8f + amount * 5.0f;
-        bpPre.setSampleRate(fs);  bpPre.setMode(SVF::Mode::Bandpass);  bpPre.setCutoff(hz);  bpPre.setResonance(q);
-        bpPost.setSampleRate(fs); bpPost.setMode(SVF::Mode::Bandpass); bpPost.setCutoff(hz); bpPost.setResonance(q);
-        res2 = hz2 > 0.0f;
-        if (res2)
-        {
-            bpPre2.setSampleRate(fs);  bpPre2.setMode(SVF::Mode::Bandpass);  bpPre2.setCutoff(hz2); bpPre2.setResonance(q * 1.3f);
-            bpPost2.setSampleRate(fs); bpPost2.setMode(SVF::Mode::Bandpass); bpPost2.setCutoff(hz2); bpPost2.setResonance(q * 1.3f);
-        }
+        tgtAmt = amount * amount * 6.0f;                    // up to +17 dB of peak into the shaper
+        tgtQ = 0.8f + amount * 5.0f;
+        tgtHz = hz; res2 = hz2 > 0.0f; tgtHz2 = res2 ? hz2 : hz;
+        if (curHz <= 0.0f) { curHz = tgtHz; curHz2 = tgtHz2; curQ = tgtQ; resAmt = tgtAmt; applyRes(); }
     }
 
     float process(float x) noexcept
@@ -121,6 +116,15 @@ public:
         // track dry level
         envIn += (std::fabs(x) - envIn) * envA;
         if (d < 0.002f) { envOut = envIn; agGain = 1.0f; return x; }
+        // glide resonance targets and refresh coefficients every 16 samples
+        if ((++resCounter & 15) == 0)
+        {
+            const float k = 0.08f;   // 16-sample steps -> ~12 ms
+            curHz = std::exp(std::log(curHz) + (std::log(tgtHz) - std::log(curHz)) * k);
+            curHz2 = std::exp(std::log(curHz2) + (std::log(tgtHz2) - std::log(curHz2)) * k);
+            curQ += (tgtQ - curQ) * k; resAmt += (tgtAmt - resAmt) * k;
+            applyRes();
+        }
         // resonant pre-emphasis: the chosen bandwidth hits the shaper harder (de-emphasised below)
         if (resAmt > 0.001f) { const float x0 = x; x += bpPre.process(x0) * resAmt; if (res2) x += bpPre2.process(x0) * resAmt * 0.7f; }
 
@@ -152,6 +156,16 @@ public:
     float autoGainDb() const noexcept { return 20.0f * std::log10(std::max(agGain, 1e-4f)); }
 
 private:
+    void applyRes() noexcept
+    {
+        bpPre.setSampleRate(fs);  bpPre.setMode(SVF::Mode::Bandpass);  bpPre.setCutoff(curHz);  bpPre.setResonance(curQ);
+        bpPost.setSampleRate(fs); bpPost.setMode(SVF::Mode::Bandpass); bpPost.setCutoff(curHz); bpPost.setResonance(curQ);
+        if (res2)
+        {
+            bpPre2.setSampleRate(fs);  bpPre2.setMode(SVF::Mode::Bandpass);  bpPre2.setCutoff(curHz2); bpPre2.setResonance(curQ * 1.3f);
+            bpPost2.setSampleRate(fs); bpPost2.setMode(SVF::Mode::Bandpass); bpPost2.setCutoff(curHz2); bpPost2.setResonance(curQ * 1.3f);
+        }
+    }
     float shape(float v) const noexcept
     {
         switch (ch)
@@ -167,6 +181,7 @@ private:
         }
     }
     Oversampler4x os; OnePole dc, pres; SVF bpPre, bpPost, bpPre2, bpPost2; float resAmt = 0.0f; bool res2 = false;
+    float tgtHz = 1000.0f, tgtHz2 = 1000.0f, tgtQ = 1.0f, tgtAmt = 0.0f, curHz = 0.0f, curHz2 = 1000.0f, curQ = 1.0f; unsigned resCounter = 0;
     int ch = 0; float d = 0, h = 0; double fs = 48000.0;
     float envIn = 0, envOut = 0, envA = 0.001f, agGain = 1.0f, agA = 0.001f, crushHold = 0, crushPhase = 0;
 };

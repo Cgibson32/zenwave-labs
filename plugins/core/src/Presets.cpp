@@ -10,6 +10,13 @@ namespace Presets
     static const Preset kPresets[] = {
         { "Init",                 "Init",    0.40f, 0.30f,  0.00f, 1.00f, 1.00f, 0.0f, 150.0f, 3500.0f, true,  { 0, 0.30f, 1.0f, 0.0f }, { 0, 0.30f, 1.0f, 0.0f }, { 0, 0.30f, 1.0f, 0.0f } },
 
+        // --- Signature ---
+        { "Growl Engine",         "Signature", 0.60f, 0.50f,  0.00f, 1.00f, 1.00f, 0.0f, 120.0f, 3000.0f, true,  { 0, 0.20f, 1.0f, 0.0f }, { 1, 0.60f, 1.0f, 0.5f }, { 2, 0.40f, 0.9f, 0.0f } },
+        { "808 Glue",             "Signature", 0.40f, 0.40f, -0.30f, 1.00f, 1.00f, 0.0f, 90.0f,  2000.0f, false, { 1, 0.35f, 1.0f, 0.0f }, { 0, 0.30f, 1.0f, 0.0f }, { 0, 0.20f, 0.8f, 0.0f } },
+        { "Vocal Presence",       "Signature", 0.35f, 0.55f, -0.40f, 1.00f, 0.60f, 0.0f, 200.0f, 4500.0f, true,  { 0, 0.10f, 1.0f, 0.0f }, { 1, 0.45f, 1.0f, 0.0f }, { 5, 0.30f, 1.0f, 0.5f } },
+        { "Drum Bus Heat",        "Signature", 0.35f, 0.40f,  0.00f, 1.05f, 1.00f, 0.0f, 110.0f, 4000.0f, true,  { 0, 0.30f, 1.0f, 0.0f }, { 1, 0.40f, 1.0f, 0.0f }, { 0, 0.35f, 1.0f, 0.0f } },
+        { "Neuro Talk",           "Signature", 0.80f, 0.80f,  0.00f, 1.00f, 1.00f, 0.0f, 150.0f, 4000.0f, true,  { 0, 0.15f, 1.0f, 0.0f }, { 2, 0.75f, 1.0f, 0.0f }, { 3, 0.70f, 1.0f, 1.0f } },
+
         // --- Bass ---
         { "Growl Glue",           "Bass",    0.55f, 0.45f,  0.00f, 1.00f, 1.00f, 0.0f, 120.0f, 2500.0f, true,  { 0, 0.20f, 1.0f, 0.0f }, { 1, 0.65f, 1.0f, 0.5f }, { 0, 0.45f, 0.9f, 0.0f } },
         { "Riddim Crunch",        "Bass",    0.70f, 0.60f,  0.00f, 1.00f, 1.00f, 0.0f, 100.0f, 1800.0f, true,  { 0, 0.10f, 1.0f, 0.0f }, { 3, 0.75f, 1.0f, 1.0f }, { 2, 0.50f, 0.8f, 0.0f } },
@@ -77,6 +84,13 @@ namespace Presets
         setParam(apvts, ParamIDs::crushOn, 0.0f); setParam(apvts, ParamIDs::crushBits, 12.0f); setParam(apvts, ParamIDs::crushRate, 0.0f); setParam(apvts, ParamIDs::crushMix, 1.0f);
         {
             const juce::String nm(p.name);
+            // Signature set
+            if (nm == "Growl Engine")   { setParam(apvts, ParamIDs::vowel, 1.0f); setParam(apvts, ParamIDs::bandTune(1), 500.0f); setParam(apvts, ParamIDs::bandRes(1), 0.55f); setParam(apvts, ParamIDs::punch, -0.3f); setParam(apvts, ParamIDs::highCut, 14000.0f); }
+            if (nm == "808 Glue")       { setParam(apvts, ParamIDs::punch, -0.5f); }
+            if (nm == "Vocal Presence") { setParam(apvts, ParamIDs::bandTune(1), 2200.0f); setParam(apvts, ParamIDs::bandRes(1), 0.30f); setParam(apvts, ParamIDs::punch, -0.3f); setParam(apvts, ParamIDs::highCut, 16000.0f); }
+            if (nm == "Drum Bus Heat")  { setParam(apvts, ParamIDs::punch, -0.6f); }
+            if (nm == "Neuro Talk")     { setParam(apvts, ParamIDs::vowel, 1.0f); setParam(apvts, ParamIDs::bandTune(1), 800.0f); setParam(apvts, ParamIDs::bandRes(1), 0.60f); setParam(apvts, ParamIDs::bandRes(2), 0.40f); setParam(apvts, ParamIDs::bandTune(2), 5000.0f);
+                                          setParam(apvts, ParamIDs::crushOn, 1.0f); setParam(apvts, ParamIDs::crushBits, 9.0f); setParam(apvts, ParamIDs::crushRate, 0.2f); setParam(apvts, ParamIDs::crushMix, 0.35f); }
             if (nm == "Neuro Bite")     { setParam(apvts, ParamIDs::bandTune(1), 900.0f);  setParam(apvts, ParamIDs::bandRes(1), 0.55f); setParam(apvts, ParamIDs::bandTune(2), 5200.0f); setParam(apvts, ParamIDs::bandRes(2), 0.35f); }
             if (nm == "Riddim Crunch")  { setParam(apvts, ParamIDs::bandTune(1), 650.0f);  setParam(apvts, ParamIDs::bandRes(1), 0.45f); }
             if (nm == "Wonky Fuzz")     { setParam(apvts, ParamIDs::bandTune(1), 1200.0f); setParam(apvts, ParamIDs::bandRes(1), 0.60f); }
@@ -97,6 +111,13 @@ namespace Presets
         //                                   LowTune MidTune HighTune LowRes MidRes HighRes CrushBits CrushRate Punch=22)
         const juce::String n(p.name);
         if (n == "Growl Glue")     { zwui::setLfo(apvts, 0, 7, true, 10, 1.0f); zwui::setModSlot(apvts, 1, 1, 15, 0.45f); }   // step lane walks the vowel
+        if (n == "Growl Engine")   { zwui::setLfo(apvts, 0, 7, true, 10, 1.0f); zwui::setModSlot(apvts, 0, 1, 15, 0.45f);
+                                     zwui::setEnv(apvts, 3.0f, 200.0f, 0.2f, 250.0f); zwui::setModSlot(apvts, 1, 3, 9, 0.30f); }     // vowel walks the bar; hits bite harder
+        if (n == "Vocal Presence") { zwui::setEnv(apvts, 5.0f, 150.0f, 1.0f, 400.0f); zwui::setModSlot(apvts, 0, 3, 1, -0.20f); }   // loud phrases ease the drive back
+        if (n == "Drum Bus Heat")  { zwui::setEnv(apvts, 1.0f, 80.0f, 0.0f, 120.0f);  zwui::setModSlot(apvts, 0, 3, 2, 0.20f); }    // transients get a touch more heat
+        if (n == "Neuro Talk")     { zwui::setLfo(apvts, 0, 7, true, 9, 1.0f);  zwui::setModSlot(apvts, 0, 1, 15, 0.50f);
+                                     zwui::setLfo(apvts, 1, 5, true, 2, 1.0f);  zwui::setModSlot(apvts, 1, 2, 20, 0.30f);
+                                     zwui::setEnv(apvts, 2.0f, 120.0f, 0.0f, 200.0f); zwui::setModSlot(apvts, 2, 3, 18, 0.25f); }  // steps talk, S&H stutters the bits, hits sharpen the vowel
         if (n == "Growl Glue")     { zwui::setModSlot(apvts, 0, 3, 9, 0.35f); }                                   // env -> mid drive: growls bite harder on hits
         if (n == "Neuro Bite")     { zwui::setLfo(apvts, 0, 5, true, 2, 1.0f); zwui::setModSlot(apvts, 0, 1, 7, 0.25f); } // S&H 1/16 on the high crossover
         if (n == "Wonky Fuzz")     { zwui::setLfo(apvts, 0, 6, true, 8, 1.0f); zwui::setModSlot(apvts, 0, 1, 2, 0.30f); zwui::setModSlot(apvts, 1, 1, 15, 0.20f); }   // drift LFO also wanders the mid resonance

@@ -23,7 +23,6 @@ struct ModIDs
     static constexpr auto envDecay   = "envdecay";
     static constexpr auto envSustain = "envsustain";
     static constexpr auto envRelease = "envrelease";
-    static constexpr auto envSens    = "envsens";
     static juce::String slotSrc(int i) { return "mod" + juce::String(i + 1) + "src"; }
     static juce::String slotDst(int i) { return "mod" + juce::String(i + 1) + "dst"; }
     static juce::String slotAmt(int i) { return "mod" + juce::String(i + 1) + "amt"; }
@@ -57,8 +56,6 @@ inline void addModParams(std::vector<std::unique_ptr<juce::RangedAudioParameter>
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envRelease, 1 }, "Env Release", Rng{ 10.0f, 2000.0f, 0.1f, 0.4f }, 180.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envDecay, 1 }, "Env Decay", Rng{ 5.0f, 2000.0f, 0.1f, 0.4f }, 120.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envSustain, 1 }, "Env Sustain", Rng{ 0.0f, 1.0f, 0.001f }, 1.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
-    params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envSens, 1 }, "Env Sensitivity", Rng{ 0.0f, 1.0f, 0.001f }, 0.5f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
     // Each LFO has its own 16-step lane for the "Steps" shape (one pass = the LFO's division)
     for (int l = 0; l < 2; ++l)
@@ -100,6 +97,14 @@ inline void setLfo(juce::AudioProcessorValueTreeState& apvts, int lfo, int shape
     set(ModIDs::lfoShape(lfo), float(shape)); set(ModIDs::lfoSync(lfo), sync ? 1.0f : 0.0f); set(ModIDs::lfoDiv(lfo), float(div)); set(ModIDs::lfoRate(lfo), rateHz);
 }
 
+inline void setEnv(juce::AudioProcessorValueTreeState& apvts, float atkMs, float decMs, float sus, float relMs)
+{
+    auto set = [&](const juce::String& id, float plain) { if (auto* rp = apvts.getParameter(id)) { rp->beginChangeGesture(); rp->setValueNotifyingHost(rp->convertTo0to1(plain)); rp->endChangeGesture(); } };
+    set(ModIDs::envAttack, atkMs); set(ModIDs::envDecay, decMs); set(ModIDs::envSustain, sus); set(ModIDs::envRelease, relMs);
+}
+inline void setParamPlain(juce::AudioProcessorValueTreeState& apvts, const juce::String& id, float plain)
+{ if (auto* rp = apvts.getParameter(id)) { rp->beginChangeGesture(); rp->setValueNotifyingHost(rp->convertTo0to1(plain)); rp->endChangeGesture(); } }
+
 class ModMatrix
 {
 public:
@@ -125,7 +130,6 @@ public:
         envDecay = apvts.getRawParameterValue(ModIDs::envDecay);
         envSustain = apvts.getRawParameterValue(ModIDs::envSustain);
         envRelease = apvts.getRawParameterValue(ModIDs::envRelease);
-        envSens = apvts.getRawParameterValue(ModIDs::envSens);
         for (int i = 0; i < ModIDs::kSlots; ++i)
         {
             slot[i].src = apvts.getRawParameterValue(ModIDs::slotSrc(i));
@@ -134,16 +138,17 @@ public:
         }
     }
 
-    void prepare(double sampleRate) { sr = sampleRate; env = 0.0f; adsr = 0.0f; gate = false; stage = 0; for (auto& l : lfo) { l.phase = 0.0; l.rnd = 0.0f; l.rndTarget = 0.0f; l.rndPrev = 0.0f; } rng.setSeed(1234); }
+    void prepare(double sampleRate) { sr = sampleRate; env = 0.0f; adsr = 0.0f; gate = false; stage = 0; slowPeak = 0.05f; for (auto& l : lfo) { l.phase = 0.0; l.rnd = 0.0f; l.rndTarget = 0.0f; l.rndPrev = 0.0f; } rng.setSeed(1234); }
 
     // Advance sources over one sub-block of input. ppq/playing come from the host transport.
     void process(const float* inL, const float* inR, int n, double bpm, double ppq, bool playing)
     {
-        // Input-triggered ADSR: a fast peak follower (scaled by SENS) opens a gate; the envelope then runs
-        // Attack -> Decay -> Sustain while the gate is open and Release when it closes. Retriggers on new hits.
+        // Input-triggered ADSR: a fast peak follower, normalised by a slow running peak (so it self-adjusts to
+        // any input level), opens a gate; the envelope then runs Attack -> Decay -> Sustain while the gate is
+        // open and Release when it closes. Retriggers on new hits.
         {
             const float fa = std::exp(-1.0f / (float(sr) * 0.001f)), fr = std::exp(-1.0f / (float(sr) * 0.040f));
-            const float gain = 1.0f + envSens->load() * envSens->load() * 40.0f;   // up to +32 dB
+            const float pkDecay = std::exp(-1.0f / (float(sr) * 1.5f));
             const float atk = std::exp(-1.0f / (float(sr) * envAttack->load() * 0.001f));
             const float dec = std::exp(-1.0f / (float(sr) * envDecay->load() * 0.001f));
             const float rel = std::exp(-1.0f / (float(sr) * envRelease->load() * 0.001f));
@@ -152,9 +157,10 @@ public:
             {
                 const float x = std::max(std::abs(inL[i]), std::abs(inR ? inR[i] : inL[i]));
                 env = x > env ? fa * env + (1.0f - fa) * x : fr * env + (1.0f - fr) * x;
-                const float lvl = std::min(1.0f, env * gain);
-                if (! gate && lvl > 0.18f) { gate = true; stage = 1; }
-                else if (gate && lvl < 0.07f) { gate = false; stage = 3; }
+                slowPeak = std::max(env, slowPeak * pkDecay); if (slowPeak < 0.003f) slowPeak = 0.003f;   // ~-50 dBFS floor: silence never triggers
+                const float lvl = env / slowPeak;                      // 0..1 relative to the recent loudest moment
+                if (! gate && lvl > 0.45f && env > 0.004f) { gate = true; stage = 1; }
+                else if (gate && lvl < 0.18f) { gate = false; stage = 3; }
                 switch (stage)
                 {
                     case 1: adsr = atk * adsr + (1.0f - atk) * 1.08f; if (adsr >= 1.0f) { adsr = 1.0f; stage = 2; } break;   // attack (slight overshoot target so it reaches 1)
@@ -259,8 +265,8 @@ private:
     struct Lfo { std::atomic<float>* shape{}, * sync{}, * div{}, * rate{}; std::atomic<float>* stepP[ModIDs::kSteps] {}; std::atomic<float>* glideP{}; double phase = 0; float rnd = 0, rndTarget = 0, rndPrev = 0, smooth = 0; int cycleCount = 0; std::atomic<float> phaseVis { 0.0f }; std::atomic<int> stepVis { 0 }; };
     struct Slot { std::atomic<float>* src{}, * dst{}, * amt{}; };
     Lfo lfo[2]; Slot slot[ModIDs::kSlots];
-    std::atomic<float>* envAttack{}, * envRelease{}, * envSens{}, * envDecay{}, * envSustain{};
-    float adsr = 0.0f; bool gate = false; int stage = 0;
+    std::atomic<float>* envAttack{}, * envRelease{}, * envDecay{}, * envSustain{};
+    float adsr = 0.0f, slowPeak = 0.05f; bool gate = false; int stage = 0;
 public:
     std::atomic<bool> gateVis { false };
 private:
