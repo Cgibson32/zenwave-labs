@@ -13,9 +13,12 @@ class ModPanel : public juce::Component
 public:
     ModPanel(juce::AudioProcessorValueTreeState& apvts, ModMatrix& m, LookAndFeel& l) : mod(m), lnf(l), state(apvts)
     {
-        for (int i = 0; i < ModIDs::kSteps; ++i) stepParam[i] = apvts.getParameter(ModIDs::step(i));
-        glide.init(*this, apvts, ModIDs::seqGlide, "GLIDE", false, false);
-        glide.slider.setTooltip("Step glide: how much each step slides into the next (0 = hard steps, 100 % = fully smoothed)");
+        for (int l = 0; l < 2; ++l)
+        {
+            for (int i = 0; i < ModIDs::kSteps; ++i) lfo[l].stepParam[i] = apvts.getParameter(ModIDs::step(l, i));
+            lfo[l].glide.init(*this, apvts, ModIDs::glide(l).toRawUTF8(), "GLIDE", false, false);
+            lfo[l].glide.slider.setTooltip("Step glide: how much each step slides into the next (0 = hard steps, 100 % = fully smoothed)");
+        }
         for (int i = 0; i < 2; ++i)
         {
             auto& L = lfo[i];
@@ -27,8 +30,10 @@ public:
             L.divAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, ModIDs::lfoDiv(i), L.div);
             L.rate.init(*this, apvts, ModIDs::lfoRate(i).toRawUTF8(), "RATE", false, false);
         }
-        attack.init(*this, apvts, ModIDs::envAttack, "ATTACK", false, false);
-        release.init(*this, apvts, ModIDs::envRelease, "RELEASE", false, false);
+        attack.init(*this, apvts, ModIDs::envAttack, "ATK", false, false);
+        decay.init(*this, apvts, ModIDs::envDecay, "DEC", false, false);
+        sustain.init(*this, apvts, ModIDs::envSustain, "SUS", false, false);
+        release.init(*this, apvts, ModIDs::envRelease, "REL", false, false);
         sens.init(*this, apvts, ModIDs::envSens, "SENS", false, false);
         for (int i = 0; i < ModIDs::kSlots; ++i)
         {
@@ -43,14 +48,16 @@ public:
         }
         for (int i = 0; i < 2; ++i)
         {
-            lfo[i].shape.setTooltip("LFO shape: Sine, Triangle, Saw Up, Saw Down, Square, Random (stepped), Drift (smooth random), Steps (draw a 16-step lane in the display; one lane shared by both LFOs)");
+            lfo[i].shape.setTooltip("LFO shape: Sine, Triangle, Saw Up, Saw Down, Square, Random (stepped), Drift (smooth random), Steps (draw this LFO's own 16-step lane in the display)");
             lfo[i].sync.setTooltip("Sync: one LFO cycle per division, phase-locked to the host bar");
             lfo[i].div.setTooltip("LFO division when SYNC is on");
             lfo[i].rate.slider.setTooltip("LFO rate in Hz when SYNC is off (0.02-20 Hz)");
         }
-        attack.slider.setTooltip("Envelope attack: how fast the follower rises on a hit");
-        release.slider.setTooltip("Envelope release: how fast it falls after the hit");
-        sens.slider.setTooltip("Envelope sensitivity: how hard a normal-level signal pushes the follower (watch the bar)");
+        attack.slider.setTooltip("Attack: time to reach full after the input opens the gate");
+        decay.slider.setTooltip("Decay: time to fall from full to the Sustain level while the input keeps playing");
+        sustain.slider.setTooltip("Sustain: the level held while the input keeps playing (100 % = classic follower feel)");
+        release.slider.setTooltip("Release: time to fall to zero after the input stops");
+        sens.slider.setTooltip("Sensitivity: input gain into the gate - turn up until quiet parts trigger, down until only hits do (the bar shows the envelope, the dot shows the gate)");
         for (auto& S : slot)
         {
             S.src.setTooltip("Modulation source for this slot");
@@ -62,7 +69,7 @@ public:
 
     // Step lane editing: drag inside an LFO scope whose shape is "Steps"
     int scopeAt(juce::Point<float> p) const { for (int i = 0; i < 2; ++i) if (lfo[i].scope.contains(p) && lfo[i].shape.getSelectedId() == 8) return i; return -1; }
-    void mouseDown(const juce::MouseEvent& e) override { editing = scopeAt(e.position); if (editing >= 0) { for (auto* p : stepParam) p->beginChangeGesture(); mouseDrag(e); } }
+    void mouseDown(const juce::MouseEvent& e) override { editing = scopeAt(e.position); if (editing >= 0) { for (auto* p : lfo[editing].stepParam) p->beginChangeGesture(); mouseDrag(e); } }
     void mouseDrag(const juce::MouseEvent& e) override
     {
         if (editing < 0) return;
@@ -71,17 +78,18 @@ public:
         float v = juce::jlimit(-1.0f, 1.0f, 1.0f - 2.0f * (e.position.y - r.getY()) / r.getHeight());
         if (e.mods.isShiftDown()) v = std::round(v * 4.0f) / 4.0f;             // shift = quantise to quarters
         if (e.mods.isAltDown()) v = 0.0f;                                        // alt = clear
-        stepParam[st]->setValueNotifyingHost(stepParam[st]->convertTo0to1(v));
+        auto* sp = lfo[editing].stepParam[st];
+        sp->setValueNotifyingHost(sp->convertTo0to1(v));
         repaint();
     }
-    void mouseUp(const juce::MouseEvent&) override { if (editing >= 0) for (auto* p : stepParam) p->endChangeGesture(); editing = -1; }
+    void mouseUp(const juce::MouseEvent&) override { if (editing >= 0) for (auto* p : lfo[editing].stepParam) p->endChangeGesture(); editing = -1; }
 
     // scale = editor width / 880
     void layoutScaled(float s)
     {
         sc = s;
         auto S = [s](float v) { return juce::roundToInt(v * s); };
-        glide.layout(S(18 + 132), S(76), S(66), S(66), S(11));   // sits where LFO 1's RATE sits; shown only in Steps mode
+        for (int i = 0; i < 2; ++i) lfo[i].glide.layout(S(18 + i * 212 + 132), S(76), S(66), S(66), S(11));   // where RATE sits; shown in Steps mode
         for (int i = 0; i < 2; ++i)
         {
             auto& L = lfo[i]; const int x0 = S(18 + i * 212);
@@ -91,11 +99,10 @@ public:
             L.rate.layout(x0 + S(132), S(76), S(66), S(66), S(11));
             L.scope = juce::Rectangle<float>(float(x0), S(62.0f), S(120.0f), S(86.0f));
         }
-        const int ex = S(448);
-        attack.layout (ex,          S(78), S(60), S(66), S(11));
-        release.layout(ex + S(62),  S(78), S(60), S(66), S(11));
-        sens.layout   (ex + S(124), S(78), S(60), S(66), S(11));
-        envMeter = juce::Rectangle<float>(float(ex), S(38.0f), S(184.0f), S(16.0f));
+        const int ex = S(438);
+        Knob* envK[5] = { &attack, &decay, &sustain, &release, &sens };
+        for (int k = 0; k < 5; ++k) envK[k]->layout(ex + S(k * 38), S(84), S(38), S(56), S(11));
+        envMeter = juce::Rectangle<float>(float(ex), S(38.0f), S(188.0f), S(16.0f));
         for (int i = 0; i < ModIDs::kSlots; ++i)
         {
             auto& Sl = slot[i]; const int y = S(32 + i * 31);
@@ -115,9 +122,9 @@ public:
             anySteps |= steps;
             lfo[i].div.setEnabled(sync); lfo[i].div.setAlpha(sync ? 1.0f : 0.4f);
             lfo[i].rate.slider.setAlpha(sync ? 0.35f : 1.0f);
-            if (i == 0) { lfo[0].rate.slider.setVisible(! steps); lfo[0].rate.label.setVisible(! steps); }
+            lfo[i].rate.slider.setVisible(! steps); lfo[i].rate.label.setVisible(! steps);
+            lfo[i].glide.slider.setVisible(steps); lfo[i].glide.label.setVisible(steps);
         }
-        glide.slider.setVisible(lfo[0].shape.getSelectedId() == 8); glide.label.setVisible(lfo[0].shape.getSelectedId() == 8);
         juce::ignoreUnused(anySteps);
         for (auto& Sl : slot) { const bool on = Sl.src.getSelectedId() > 1 && Sl.dst.getSelectedId() > 1; Sl.amt.slider.setAlpha(on ? 1.0f : 0.4f); }
         repaint();
@@ -133,7 +140,7 @@ public:
             g.setColour(lnf.accentHi); g.drawText("LFO " + juce::String(i + 1), L.scope.withY(18.0f * s).withHeight(14.0f * s), juce::Justification::centredLeft);
             drawLfoScope(g, L.scope, i, s);
         }
-        g.setColour(lnf.accentHi); g.drawText("ENV FOLLOW", envMeter.withY(18.0f * s).withHeight(14.0f * s), juce::Justification::centredLeft);
+        g.setColour(lnf.accentHi); g.drawText("ENVELOPE  (ADSR)", envMeter.withY(18.0f * s).withHeight(14.0f * s), juce::Justification::centredLeft);
         drawEnvMeter(g, envMeter, s);
         g.setColour(lnf.accentHi); g.drawText("ROUTING", juce::Rectangle<float>(634.0f * s, 18.0f * s, 150.0f * s, 14.0f * s), juce::Justification::centredLeft);
         // slot connector lines: src → dst → amount, lit when active
@@ -170,7 +177,7 @@ private:
             const int cur = mod.lfoStep(i);
             for (int st = 0; st < ModIDs::kSteps; ++st)
             {
-                const float v = stepParam[st]->convertFrom0to1(stepParam[st]->getValue());
+                const float v = lfo[i].stepParam[st]->convertFrom0to1(lfo[i].stepParam[st]->getValue());
                 const float x = in.getX() + st * w;
                 const float y0 = in.getCentreY(), y1 = in.getCentreY() - v * in.getHeight() * 0.5f;
                 auto bar = juce::Rectangle<float>(x + 1.0f, juce::jmin(y0, y1), w - 2.0f, std::abs(y1 - y0));
@@ -181,7 +188,7 @@ private:
             g.setColour(juce::Colours::white.withAlpha(0.2f)); g.drawVerticalLine(int(in.getX() + in.getWidth() * ph), in.getY(), in.getBottom());
             g.setColour(lnf.accent.withAlpha(0.5f)); g.drawRoundedRectangle(r, 8.0f * s, 1.0f);
             g.setFont(juce::Font(juce::FontOptions(7.0f * s, juce::Font::bold))); g.setColour(Palette::dim);
-            g.drawText("DRAW   -   SHIFT: QUANTISE   -   ALT: CLEAR", r.withTrimmedTop(r.getHeight() - 10.0f * s), juce::Justification::centred);
+            g.drawText("DRAW  |  SHIFT: SNAP  |  ALT: CLEAR", r.withTrimmedTop(r.getHeight() - 10.0f * s), juce::Justification::centred);
             return;
         }
         juce::Path p;
@@ -226,18 +233,19 @@ private:
         g.setGradientFill(juce::ColourGradient(lnf.accent, r.getX(), r.getY(), lnf.accent2, r.getRight(), r.getY(), false));
         g.fillRoundedRectangle(fill, fill.getHeight() * 0.5f);
         g.setColour(juce::Colours::white.withAlpha(0.6f)); g.fillEllipse(fill.getRight() - 3.0f * s, r.getCentreY() - 3.0f * s, 6.0f * s, 6.0f * s);
+        // gate indicator
+        g.setColour(mod.gateVis.load() ? lnf.accent2 : Palette::dim.withAlpha(0.4f)); g.fillEllipse(r.getRight() + 4.0f * s, r.getCentreY() - 3.0f * s, 6.0f * s, 6.0f * s);
         g.setColour(lnf.accent.withAlpha(0.5f)); g.drawRoundedRectangle(r, r.getHeight() * 0.5f, 1.0f);
     }
 
-    struct LfoUI { juce::ComboBox shape, div; juce::ToggleButton sync { "SYNC" }; Knob rate; juce::Rectangle<float> scope;
+    struct LfoUI { juce::ComboBox shape, div; juce::ToggleButton sync { "SYNC" }; Knob rate, glide; juce::Rectangle<float> scope; juce::RangedAudioParameter* stepParam[ModIDs::kSteps] {};
                    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> shapeAttach, divAttach;
                    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttach; };
     struct SlotUI { juce::ComboBox src, dst; Knob amt; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> srcAttach, dstAttach; };
     LfoUI lfo[2]; SlotUI slot[ModIDs::kSlots];
-    Knob attack, release, sens, glide;
+    Knob attack, decay, sustain, release, sens;
     juce::Rectangle<float> envMeter;
     ModMatrix& mod; LookAndFeel& lnf; juce::AudioProcessorValueTreeState& state;
-    juce::RangedAudioParameter* stepParam[ModIDs::kSteps] {};
     int editing = -1; float sc = 1.0f;
 };
 

@@ -20,6 +20,8 @@ struct ModIDs
     static juce::String lfoDiv  (int i) { return "lfo" + juce::String(i + 1) + "div"; }
     static juce::String lfoRate (int i) { return "lfo" + juce::String(i + 1) + "rate"; }
     static constexpr auto envAttack  = "envattack";
+    static constexpr auto envDecay   = "envdecay";
+    static constexpr auto envSustain = "envsustain";
     static constexpr auto envRelease = "envrelease";
     static constexpr auto envSens    = "envsens";
     static juce::String slotSrc(int i) { return "mod" + juce::String(i + 1) + "src"; }
@@ -28,8 +30,8 @@ struct ModIDs
 
     static juce::StringArray shapeNames() { return { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Random", "Drift", "Steps" }; }
     static constexpr int kSteps = 16;
-    static juce::String step(int i) { return "seqstep" + juce::String(i + 1); }
-    static constexpr auto seqGlide = "seqglide";
+    static juce::String step(int lfo, int i) { return "lfo" + juce::String(lfo + 1) + "step" + juce::String(i + 1); }
+    static juce::String glide(int lfo) { return "lfo" + juce::String(lfo + 1) + "glide"; }
     static juce::StringArray sourceNames() { return { "Off", "LFO1", "LFO2", "ENV" }; }
 };
 
@@ -53,15 +55,21 @@ inline void addModParams(std::vector<std::unique_ptr<juce::RangedAudioParameter>
     auto ms = [](float v, int) { return v < 100.0f ? juce::String(v, 1) + " ms" : juce::String(juce::roundToInt(v)) + " ms"; };
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envAttack, 1 }, "Env Attack", Rng{ 0.5f, 500.0f, 0.1f, 0.4f }, 8.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envRelease, 1 }, "Env Release", Rng{ 10.0f, 2000.0f, 0.1f, 0.4f }, 180.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envDecay, 1 }, "Env Decay", Rng{ 5.0f, 2000.0f, 0.1f, 0.4f }, 120.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envSustain, 1 }, "Env Sustain", Rng{ 0.0f, 1.0f, 0.001f }, 1.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envSens, 1 }, "Env Sensitivity", Rng{ 0.0f, 1.0f, 0.001f }, 0.5f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
-    // 16-step lane shared by any LFO set to "Steps" (one cycle = the LFO's division)
-    for (int i = 0; i < ModIDs::kSteps; ++i)
-        params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::step(i), 1 }, "Step " + juce::String(i + 1), Rng{ -1.0f, 1.0f, 0.001f },
-            (i % 4 == 0) ? 1.0f : (i % 2 == 0 ? 0.0f : -0.5f),
-            juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(juce::roundToInt(v * 100)) + " %"; })));
-    params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::seqGlide, 1 }, "Step Glide", Rng{ 0.0f, 1.0f, 0.001f }, 0.1f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
+    // Each LFO has its own 16-step lane for the "Steps" shape (one pass = the LFO's division)
+    for (int l = 0; l < 2; ++l)
+    {
+        for (int i = 0; i < ModIDs::kSteps; ++i)
+            params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::step(l, i), 1 }, "LFO " + juce::String(l + 1) + " Step " + juce::String(i + 1), Rng{ -1.0f, 1.0f, 0.001f },
+                l == 0 ? ((i % 4 == 0) ? 1.0f : (i % 2 == 0 ? 0.0f : -0.5f)) : (1.0f - 2.0f * float(i) / 15.0f),
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(juce::roundToInt(v * 100)) + " %"; })));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::glide(l), 1 }, "LFO " + juce::String(l + 1) + " Glide", Rng{ 0.0f, 1.0f, 0.001f }, 0.1f,
+            juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
+    }
     for (int i = 0; i < ModIDs::kSlots; ++i)
     {
         const auto n = "Mod " + juce::String(i + 1) + " ";
@@ -77,7 +85,7 @@ inline void resetModParams(juce::AudioProcessorValueTreeState& apvts)
 {
     for (auto* p : apvts.processor.getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p))
-            if (rp->paramID.startsWith("lfo") || rp->paramID.startsWith("env") || rp->paramID.startsWith("mod") || rp->paramID.startsWith("seq"))
+            if (rp->paramID.startsWith("lfo") || rp->paramID.startsWith("env") || rp->paramID.startsWith("mod"))
             { rp->beginChangeGesture(); rp->setValueNotifyingHost(rp->getDefaultValue()); rp->endChangeGesture(); }
 }
 // Set one slot of the matrix (used by factory presets that ship with motion)
@@ -108,9 +116,14 @@ public:
             lfo[i].div   = apvts.getRawParameterValue(ModIDs::lfoDiv(i));
             lfo[i].rate  = apvts.getRawParameterValue(ModIDs::lfoRate(i));
         }
-        for (int i = 0; i < ModIDs::kSteps; ++i) stepP[i] = apvts.getRawParameterValue(ModIDs::step(i));
-        glideP = apvts.getRawParameterValue(ModIDs::seqGlide);
+        for (int l = 0; l < 2; ++l)
+        {
+            for (int i = 0; i < ModIDs::kSteps; ++i) lfo[l].stepP[i] = apvts.getRawParameterValue(ModIDs::step(l, i));
+            lfo[l].glideP = apvts.getRawParameterValue(ModIDs::glide(l));
+        }
         envAttack = apvts.getRawParameterValue(ModIDs::envAttack);
+        envDecay = apvts.getRawParameterValue(ModIDs::envDecay);
+        envSustain = apvts.getRawParameterValue(ModIDs::envSustain);
         envRelease = apvts.getRawParameterValue(ModIDs::envRelease);
         envSens = apvts.getRawParameterValue(ModIDs::envSens);
         for (int i = 0; i < ModIDs::kSlots; ++i)
@@ -121,22 +134,37 @@ public:
         }
     }
 
-    void prepare(double sampleRate) { sr = sampleRate; env = 0.0f; for (auto& l : lfo) { l.phase = 0.0; l.rnd = 0.0f; l.rndTarget = 0.0f; l.rndPrev = 0.0f; } rng.setSeed(1234); }
+    void prepare(double sampleRate) { sr = sampleRate; env = 0.0f; adsr = 0.0f; gate = false; stage = 0; for (auto& l : lfo) { l.phase = 0.0; l.rnd = 0.0f; l.rndTarget = 0.0f; l.rndPrev = 0.0f; } rng.setSeed(1234); }
 
     // Advance sources over one sub-block of input. ppq/playing come from the host transport.
     void process(const float* inL, const float* inR, int n, double bpm, double ppq, bool playing)
     {
-        // envelope follower (peak, with attack/release), scaled by sensitivity
+        // Input-triggered ADSR: a fast peak follower (scaled by SENS) opens a gate; the envelope then runs
+        // Attack -> Decay -> Sustain while the gate is open and Release when it closes. Retriggers on new hits.
         {
+            const float fa = std::exp(-1.0f / (float(sr) * 0.001f)), fr = std::exp(-1.0f / (float(sr) * 0.040f));
+            const float gain = 1.0f + envSens->load() * envSens->load() * 40.0f;   // up to +32 dB
             const float atk = std::exp(-1.0f / (float(sr) * envAttack->load() * 0.001f));
+            const float dec = std::exp(-1.0f / (float(sr) * envDecay->load() * 0.001f));
             const float rel = std::exp(-1.0f / (float(sr) * envRelease->load() * 0.001f));
+            const float sus = envSustain->load();
             for (int i = 0; i < n; ++i)
             {
                 const float x = std::max(std::abs(inL[i]), std::abs(inR ? inR[i] : inL[i]));
-                env = x > env ? atk * env + (1.0f - atk) * x : rel * env + (1.0f - rel) * x;
+                env = x > env ? fa * env + (1.0f - fa) * x : fr * env + (1.0f - fr) * x;
+                const float lvl = std::min(1.0f, env * gain);
+                if (! gate && lvl > 0.18f) { gate = true; stage = 1; }
+                else if (gate && lvl < 0.07f) { gate = false; stage = 3; }
+                switch (stage)
+                {
+                    case 1: adsr = atk * adsr + (1.0f - atk) * 1.08f; if (adsr >= 1.0f) { adsr = 1.0f; stage = 2; } break;   // attack (slight overshoot target so it reaches 1)
+                    case 2: adsr = dec * adsr + (1.0f - dec) * sus; break;                                                   // decay -> sustain
+                    case 3: adsr = rel * adsr; if (adsr < 1e-4f) { adsr = 0.0f; stage = 0; } break;                         // release
+                    default: break;
+                }
             }
-            const float gain = 1.0f + envSens->load() * envSens->load() * 40.0f;   // up to +32 dB
-            src[3] = juce::jlimit(0.0f, 1.0f, env * gain);
+            src[3] = juce::jlimit(0.0f, 1.0f, adsr);
+            gateVis.store(gate);
         }
         // LFOs
         for (int i = 0; i < 2; ++i)
@@ -162,14 +190,14 @@ public:
                 case 3: v = 1.0f - 2.0f * ph; break;
                 case 4: v = ph < 0.5f ? 1.0f : -1.0f; break;
                 case 5: v = l.rndTarget; break;                                                      // sample & hold
-                case 7: { const int st = juce::jlimit(0, ModIDs::kSteps - 1, int(ph * ModIDs::kSteps)); v = stepP[st]->load(); l.stepVis.store(st); } break;   // step lane
+                case 7: { const int st = juce::jlimit(0, ModIDs::kSteps - 1, int(ph * ModIDs::kSteps)); v = l.stepP[st]->load(); l.stepVis.store(st); } break;   // this LFO's step lane
                 default: { const float t = ph * ph * (3.0f - 2.0f * ph); v = l.rndPrev + (l.rndTarget - l.rndPrev) * t; } break;  // smooth drift
             }
             // de-click square / S&H with a one-pole (≈ 3 ms); steps glide by a fraction of a step
             const int shp = int(l.shape->load());
             float k = std::exp(-float(n) / (float(sr) * 0.003f));
-            if (shp == 7) { const float g = glideP->load(); const double stepSec = cycleSec / ModIDs::kSteps; k = std::exp(-float(n) / float(sr * std::max(0.002, stepSec * (0.03 + g * 0.9)))); }
-            l.smooth = (shp == 4 || shp == 5 || shp == 7) ? k * l.smooth + (1.0f - k) * v : v;
+            if (shp == 7) { const float g = l.glideP->load(); const double stepSec = cycleSec / ModIDs::kSteps; k = std::exp(-float(n) / float(sr * std::max(0.002, stepSec * (0.03 + g * 0.9)))); }
+            l.smooth = (shp >= 2 && shp != 6) ? k * l.smooth + (1.0f - k) * v : v;   // saws, square, S&H, steps: de-clicked
             src[1 + i] = l.smooth;
             l.phaseVis.store(ph);
         }
@@ -228,11 +256,14 @@ public:
     int   lfoStep(int i) const { return lfo[i].stepVis.load(); }
 
 private:
-    struct Lfo { std::atomic<float>* shape{}, * sync{}, * div{}, * rate{}; double phase = 0; float rnd = 0, rndTarget = 0, rndPrev = 0, smooth = 0; int cycleCount = 0; std::atomic<float> phaseVis { 0.0f }; std::atomic<int> stepVis { 0 }; };
+    struct Lfo { std::atomic<float>* shape{}, * sync{}, * div{}, * rate{}; std::atomic<float>* stepP[ModIDs::kSteps] {}; std::atomic<float>* glideP{}; double phase = 0; float rnd = 0, rndTarget = 0, rndPrev = 0, smooth = 0; int cycleCount = 0; std::atomic<float> phaseVis { 0.0f }; std::atomic<int> stepVis { 0 }; };
     struct Slot { std::atomic<float>* src{}, * dst{}, * amt{}; };
     Lfo lfo[2]; Slot slot[ModIDs::kSlots];
-    std::atomic<float>* envAttack{}, * envRelease{}, * envSens{};
-    std::atomic<float>* stepP[ModIDs::kSteps] {}; std::atomic<float>* glideP{};
+    std::atomic<float>* envAttack{}, * envRelease{}, * envSens{}, * envDecay{}, * envSustain{};
+    float adsr = 0.0f; bool gate = false; int stage = 0;
+public:
+    std::atomic<bool> gateVis { false };
+private:
     std::array<juce::RangedAudioParameter*, kMaxTargets> target {};
     std::array<float, kMaxTargets> offset {}, plain {};
     float src[4] = { 0, 0, 0, 0 };
