@@ -13,7 +13,15 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     for (int o = 0; o < 2; ++o)
     {
         auto& u = osc[o];
-        addAndMakeVisible(u.table); u.table.addItemList(nebula::tableNames(), 1);
+        addAndMakeVisible(u.table);
+        {
+            const auto& names = nebula::tableNames(); const auto& secs = nebula::tableSections();
+            for (int i = 0; i < names.size(); ++i)
+            {
+                for (const auto& sec : secs) if (sec.first == i) u.table.addSectionHeading(sec.second);
+                u.table.addItem(names[i], i + 1);
+            }
+        }
         u.table.setTooltip("Wavetable: Glass (bells), Voice (formants), Metal (inharmonic), Grain (texture), Dune (saw-square-pulse), Halo (shimmering cluster), Ion (bright buzz), Void (dark sub)");
         u.tableAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(s, ParamIDs::osc(o, "table"), u.table);
         addAndMakeVisible(u.on); u.on.getProperties().set("round", true); u.on.setTooltip("Oscillator on/off");

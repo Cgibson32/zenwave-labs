@@ -4,7 +4,7 @@
 
 namespace Presets
 {
-    // tables: 0 Glass 1 Voice 2 Metal 3 Grain 4 Dune 5 Halo 6 Ion 7 Void
+    // tables: see Tables.h (0 Glass .. 7 Void, 8..23 vocal, 24..30 atmosphere, 31..35 orchestral, 36..40 bells/keys, 41..45 analogue, 46..48 sub)
     // Osc: table, position, level, octave, semis, fine, unison, spread, width, on
     // then: cutoff, res, filterMode, envAmt, drive, drift, glide | ampA D S R | modA D S R | spaceMix size decay dark | macros warmth air movement space grit width attack release
     static const Preset kPresets[] = {
@@ -46,6 +46,77 @@ namespace Presets
           900.0f, 0.1f, 0, 0.5f, 0.1f, 0.0f, 40.0f, 2.0f, 300.0f, 0.9f, 200.0f, 1.0f, 300.0f, 0.0f, 200.0f, 0.0f, 0.3f, 0.3f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 0.1f, 0.0f, 0.3f, 0.3f },
         { "Ion Growl",        "Bass",       { 6, 0.5f, 0.9f, -1, 0, 0.0f, 2, 0.1f, 0.3f, true }, { 7, 0.3f, 0.7f, -1, 0, 0.0f, 1, 0.0f, 0.0f, true },
           1500.0f, 0.5f, 0, 0.7f, 0.4f, 0.1f, 50.0f, 3.0f, 400.0f, 0.8f, 250.0f, 2.0f, 500.0f, 0.3f, 250.0f, 0.1f, 0.4f, 0.4f, 0.5f, 0.5f, 0.0f, 0.3f, 0.1f, 0.5f, 0.2f, 0.3f, 0.3f },
+
+        // =====================================================================================================
+        // CINEMATIC - score-ready pads. Slow, wide, deep, with a vocal or air layer. Drop them under a scene.
+        // Osc: table, position, level, octave, semis, fine, unison, spread, width, on
+        // cutoff, res, mode, envAmt, drive, drift, glide | ampA D S R | modA D S R | space mix size decay dark | macros warmth air movement space grit width attack release
+        { "Interstellar Organ", "Cinematic", { 44, 0.35f, 0.8f, 0, 0, 0.0f, 3, 0.2f, 0.8f, true }, { 27, 0.4f, 0.55f, -1, 0, 3.0f, 2, 0.2f, 0.7f, true },
+          5200.0f, 0.1f, 0, 0.15f, 0.05f, 0.15f, 0.0f, 1200.0f, 2000.0f, 1.0f, 4000.0f, 3000.0f, 3000.0f, 0.6f, 3000.0f, 0.5f, 1.0f, 0.9f, 0.45f, 0.5f, 0.35f, 0.3f, 0.7f, 0.0f, 0.7f, 0.7f, 0.75f },
+        { "Pandora Dawn",       "Cinematic", { 24, 0.3f, 0.8f, 0, 0, 0.0f, 6, 0.4f, 1.0f, true }, { 14, 0.3f, 0.5f, 1, 0, -6.0f, 4, 0.35f, 1.0f, true },
+          6500.0f, 0.1f, 0, 0.2f, 0.0f, 0.3f, 0.0f, 1800.0f, 2500.0f, 0.95f, 5000.0f, 4000.0f, 3000.0f, 0.5f, 4000.0f, 0.55f, 0.95f, 0.9f, 0.35f, 0.4f, 0.55f, 0.5f, 0.7f, 0.0f, 0.9f, 0.75f, 0.8f },
+        { "Dark Horizon",       "Cinematic", { 29, 0.4f, 0.9f, -1, 0, 0.0f, 2, 0.2f, 0.6f, true }, { 26, 0.5f, 0.5f, 0, 0, 5.0f, 5, 0.4f, 0.9f, true },
+          2200.0f, 0.2f, 0, 0.4f, 0.1f, 0.3f, 0.0f, 2500.0f, 3000.0f, 1.0f, 6000.0f, 5000.0f, 3000.0f, 0.7f, 4000.0f, 0.45f, 1.0f, 0.95f, 0.75f, 0.6f, 0.2f, 0.4f, 0.6f, 0.1f, 0.7f, 0.8f, 0.85f },
+        { "Frozen Cathedral",   "Cinematic", { 22, 0.35f, 0.75f, 0, 0, 0.0f, 5, 0.35f, 1.0f, true }, { 0, 0.6f, 0.45f, 1, 7, 4.0f, 3, 0.3f, 1.0f, true },
+          5500.0f, 0.1f, 0, 0.2f, 0.0f, 0.25f, 0.0f, 1500.0f, 2500.0f, 0.95f, 5000.0f, 3000.0f, 3000.0f, 0.5f, 3000.0f, 0.6f, 1.0f, 0.95f, 0.4f, 0.35f, 0.6f, 0.4f, 0.75f, 0.0f, 0.85f, 0.7f, 0.8f },
+        { "Slow Sunrise",       "Cinematic", { 31, 0.2f, 0.8f, 0, 0, 0.0f, 7, 0.45f, 1.0f, true }, { 33, 0.1f, 0.5f, -1, 0, -4.0f, 4, 0.3f, 0.8f, true },
+          1800.0f, 0.15f, 0, 0.9f, 0.05f, 0.3f, 0.0f, 3000.0f, 4000.0f, 1.0f, 5000.0f, 6000.0f, 4000.0f, 0.9f, 4000.0f, 0.4f, 0.9f, 0.8f, 0.5f, 0.55f, 0.35f, 0.3f, 0.6f, 0.05f, 0.85f, 0.85f, 0.8f },
+        { "Deep Space Drone",   "Cinematic", { 15, 0.3f, 0.9f, -1, 0, 0.0f, 3, 0.25f, 0.7f, true }, { 29, 0.6f, 0.6f, -2, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          1600.0f, 0.2f, 0, 0.3f, 0.1f, 0.35f, 0.0f, 2000.0f, 3000.0f, 1.0f, 5000.0f, 4000.0f, 3000.0f, 0.6f, 3000.0f, 0.4f, 1.0f, 0.95f, 0.8f, 0.7f, 0.15f, 0.5f, 0.6f, 0.05f, 0.6f, 0.75f, 0.85f },
+        { "Tidal Strings",      "Cinematic", { 26, 0.3f, 0.8f, 0, 0, 0.0f, 7, 0.5f, 1.0f, true }, { 32, 0.4f, 0.55f, -1, 0, 3.0f, 3, 0.3f, 0.8f, true },
+          3200.0f, 0.15f, 0, 0.5f, 0.05f, 0.35f, 0.0f, 1400.0f, 2500.0f, 0.95f, 3500.0f, 2500.0f, 3000.0f, 0.5f, 3000.0f, 0.4f, 0.9f, 0.8f, 0.45f, 0.5f, 0.4f, 0.45f, 0.6f, 0.0f, 0.8f, 0.65f, 0.7f },
+        { "Event Glass",        "Cinematic", { 39, 0.3f, 0.7f, 0, 0, 0.0f, 4, 0.3f, 1.0f, true }, { 25, 0.4f, 0.6f, -1, 0, 0.0f, 3, 0.3f, 0.9f, true },
+          7000.0f, 0.1f, 0, 0.2f, 0.0f, 0.3f, 0.0f, 2000.0f, 2500.0f, 1.0f, 6000.0f, 3000.0f, 3000.0f, 0.5f, 3000.0f, 0.55f, 1.0f, 0.95f, 0.3f, 0.3f, 0.65f, 0.5f, 0.75f, 0.0f, 0.9f, 0.75f, 0.85f },
+        { "Breathing Planet",   "Cinematic", { 28, 0.2f, 0.8f, 0, 0, 0.0f, 5, 0.35f, 1.0f, true }, { 46, 0.3f, 0.6f, -1, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          2600.0f, 0.2f, 0, 0.6f, 0.05f, 0.25f, 0.0f, 2500.0f, 3000.0f, 1.0f, 5000.0f, 5000.0f, 3000.0f, 0.8f, 3500.0f, 0.4f, 0.95f, 0.9f, 0.55f, 0.6f, 0.3f, 0.6f, 0.6f, 0.0f, 0.75f, 0.8f, 0.8f },
+        { "Last Transmission",  "Cinematic", { 30, 0.35f, 0.7f, 0, 0, 0.0f, 4, 0.4f, 1.0f, true }, { 10, 0.4f, 0.6f, 0, 0, -5.0f, 3, 0.25f, 0.8f, true },
+          3000.0f, 0.25f, 0, 0.3f, 0.1f, 0.4f, 0.0f, 1500.0f, 2500.0f, 0.95f, 4500.0f, 2500.0f, 3000.0f, 0.5f, 3000.0f, 0.5f, 1.0f, 0.9f, 0.6f, 0.5f, 0.3f, 0.55f, 0.65f, 0.1f, 0.75f, 0.7f, 0.8f },
+
+        // =====================================================================================================
+        // VOCAL - choirs and voices built from real vowel formants. Meditational, soulful, human.
+        { "Ahh Choir",          "Vocal",     { 8, 0.3f, 0.85f, 0, 0, 0.0f, 5, 0.3f, 1.0f, true }, { 9, 0.4f, 0.5f, -1, 0, 4.0f, 3, 0.25f, 0.8f, true },
+          5000.0f, 0.1f, 0, 0.15f, 0.0f, 0.3f, 0.0f, 600.0f, 1500.0f, 0.95f, 2500.0f, 1500.0f, 2000.0f, 0.5f, 2000.0f, 0.4f, 0.85f, 0.75f, 0.45f, 0.4f, 0.35f, 0.3f, 0.55f, 0.0f, 0.8f, 0.6f, 0.65f },
+        { "Ooh Choir",          "Vocal",     { 9, 0.3f, 0.85f, 0, 0, 0.0f, 5, 0.3f, 1.0f, true }, { 19, 0.3f, 0.45f, 1, 0, -4.0f, 3, 0.25f, 0.9f, true },
+          4200.0f, 0.1f, 0, 0.15f, 0.0f, 0.3f, 0.0f, 800.0f, 1500.0f, 0.95f, 3000.0f, 1500.0f, 2000.0f, 0.5f, 2000.0f, 0.45f, 0.9f, 0.8f, 0.5f, 0.45f, 0.3f, 0.3f, 0.6f, 0.0f, 0.8f, 0.65f, 0.7f },
+        { "Monastery",          "Vocal",     { 11, 0.2f, 0.9f, -1, 0, 0.0f, 3, 0.2f, 0.7f, true }, { 15, 0.3f, 0.6f, -1, 7, 2.0f, 2, 0.2f, 0.6f, true },
+          3000.0f, 0.15f, 0, 0.2f, 0.05f, 0.25f, 0.0f, 900.0f, 2000.0f, 1.0f, 3500.0f, 2000.0f, 2500.0f, 0.6f, 2500.0f, 0.5f, 1.0f, 0.9f, 0.6f, 0.6f, 0.2f, 0.3f, 0.6f, 0.0f, 0.6f, 0.65f, 0.75f },
+        { "Soul Hum",           "Vocal",     { 10, 0.25f, 0.9f, 0, 0, 0.0f, 3, 0.2f, 0.7f, true }, { 12, 0.3f, 0.4f, 0, 0, -3.0f, 2, 0.2f, 0.6f, true },
+          2800.0f, 0.15f, 0, 0.3f, 0.05f, 0.25f, 0.0f, 400.0f, 1200.0f, 0.9f, 1800.0f, 800.0f, 1500.0f, 0.5f, 1500.0f, 0.3f, 0.7f, 0.6f, 0.5f, 0.55f, 0.25f, 0.3f, 0.4f, 0.0f, 0.55f, 0.5f, 0.55f },
+        { "Gospel Pad",         "Vocal",     { 18, 0.3f, 0.85f, 0, 0, 0.0f, 4, 0.3f, 0.9f, true }, { 8, 0.5f, 0.5f, 1, 0, 5.0f, 3, 0.3f, 0.9f, true },
+          4500.0f, 0.1f, 0, 0.2f, 0.05f, 0.25f, 0.0f, 300.0f, 1200.0f, 0.9f, 1500.0f, 600.0f, 1500.0f, 0.4f, 1500.0f, 0.3f, 0.75f, 0.6f, 0.4f, 0.5f, 0.3f, 0.3f, 0.45f, 0.0f, 0.7f, 0.5f, 0.55f },
+        { "Angel Host",         "Vocal",     { 23, 0.3f, 0.75f, 0, 0, 0.0f, 6, 0.4f, 1.0f, true }, { 14, 0.4f, 0.5f, 1, 0, -6.0f, 4, 0.35f, 1.0f, true },
+          7000.0f, 0.1f, 0, 0.15f, 0.0f, 0.35f, 0.0f, 1500.0f, 2500.0f, 0.95f, 4500.0f, 3000.0f, 3000.0f, 0.5f, 3000.0f, 0.55f, 1.0f, 0.95f, 0.35f, 0.3f, 0.65f, 0.4f, 0.75f, 0.0f, 0.9f, 0.7f, 0.8f },
+        { "Throat Singer",      "Vocal",     { 20, 0.1f, 0.9f, -1, 0, 0.0f, 2, 0.15f, 0.5f, true }, { 46, 0.2f, 0.5f, -1, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          3500.0f, 0.2f, 0, 0.2f, 0.1f, 0.2f, 0.0f, 500.0f, 1500.0f, 1.0f, 2500.0f, 1500.0f, 2000.0f, 0.5f, 2000.0f, 0.35f, 0.9f, 0.8f, 0.6f, 0.6f, 0.15f, 0.4f, 0.5f, 0.0f, 0.5f, 0.55f, 0.65f },
+        { "Whisper Wind",       "Vocal",     { 16, 0.2f, 0.7f, 0, 0, 0.0f, 6, 0.5f, 1.0f, true }, { 25, 0.5f, 0.5f, 0, 0, 0.0f, 3, 0.3f, 1.0f, true },
+          8000.0f, 0.15f, 0, 0.2f, 0.0f, 0.4f, 0.0f, 2000.0f, 3000.0f, 0.95f, 5000.0f, 3000.0f, 3000.0f, 0.5f, 3000.0f, 0.5f, 1.0f, 0.9f, 0.3f, 0.3f, 0.7f, 0.6f, 0.7f, 0.0f, 0.9f, 0.75f, 0.8f },
+        { "Lullaby Voice",      "Vocal",     { 19, 0.2f, 0.9f, 0, 0, 0.0f, 2, 0.15f, 0.6f, true }, { 34, 0.2f, 0.4f, 1, 0, 2.0f, 1, 0.0f, 0.0f, true },
+          3500.0f, 0.1f, 0, 0.3f, 0.0f, 0.2f, 0.0f, 120.0f, 800.0f, 0.85f, 1200.0f, 200.0f, 800.0f, 0.3f, 800.0f, 0.35f, 0.8f, 0.7f, 0.5f, 0.5f, 0.3f, 0.2f, 0.5f, 0.0f, 0.5f, 0.35f, 0.5f },
+        { "Soul Lead",          "Vocal",     { 12, 0.4f, 0.9f, 0, 0, 0.0f, 2, 0.15f, 0.4f, true }, { 17, 0.3f, 0.4f, 0, 0, -3.0f, 1, 0.0f, 0.0f, true },
+          4500.0f, 0.2f, 0, 0.4f, 0.1f, 0.2f, 90.0f, 25.0f, 600.0f, 0.8f, 500.0f, 15.0f, 600.0f, 0.3f, 400.0f, 0.3f, 0.7f, 0.5f, 0.4f, 0.5f, 0.3f, 0.3f, 0.4f, 0.1f, 0.4f, 0.3f, 0.45f },
+
+        // =====================================================================================================
+        // ATMOSPHERE II / KEYS / PLUCKS / BASS with the new tables
+        { "Aurora Field",       "Atmosphere",{ 24, 0.2f, 0.8f, 0, 0, 0.0f, 6, 0.4f, 1.0f, true }, { 39, 0.2f, 0.4f, 1, 0, 5.0f, 3, 0.3f, 1.0f, true },
+          6000.0f, 0.1f, 0, 0.2f, 0.0f, 0.3f, 0.0f, 1500.0f, 2500.0f, 0.95f, 4000.0f, 3000.0f, 3000.0f, 0.5f, 3000.0f, 0.5f, 0.95f, 0.9f, 0.4f, 0.4f, 0.55f, 0.5f, 0.7f, 0.0f, 0.85f, 0.7f, 0.75f },
+        { "Nimbus Cloud",       "Atmosphere",{ 25, 0.4f, 0.8f, 0, 0, 0.0f, 5, 0.35f, 1.0f, true }, { 28, 0.3f, 0.5f, -1, 0, -3.0f, 3, 0.3f, 0.9f, true },
+          4000.0f, 0.15f, 0, 0.3f, 0.0f, 0.35f, 0.0f, 2000.0f, 3000.0f, 0.95f, 4500.0f, 3500.0f, 3000.0f, 0.5f, 3000.0f, 0.45f, 0.95f, 0.85f, 0.5f, 0.45f, 0.4f, 0.5f, 0.65f, 0.0f, 0.8f, 0.75f, 0.75f },
+        { "Celesta Dream",      "Keys",      { 36, 0.3f, 0.85f, 0, 0, 0.0f, 2, 0.15f, 0.6f, true }, { 39, 0.1f, 0.3f, 1, 0, 3.0f, 2, 0.2f, 0.8f, true },
+          9000.0f, 0.1f, 0, 0.5f, 0.0f, 0.1f, 0.0f, 2.0f, 1500.0f, 0.2f, 1800.0f, 1.0f, 800.0f, 0.1f, 600.0f, 0.4f, 0.85f, 0.75f, 0.35f, 0.3f, 0.5f, 0.3f, 0.6f, 0.0f, 0.6f, 0.3f, 0.6f },
+        { "Music Box Memory",   "Keys",      { 37, 0.3f, 0.85f, 1, 0, 0.0f, 1, 0.0f, 0.0f, true }, { 36, 0.2f, 0.3f, 1, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          8000.0f, 0.1f, 0, 0.6f, 0.0f, 0.1f, 0.0f, 1.0f, 900.0f, 0.1f, 1200.0f, 1.0f, 500.0f, 0.0f, 400.0f, 0.35f, 0.8f, 0.7f, 0.3f, 0.3f, 0.45f, 0.2f, 0.5f, 0.0f, 0.5f, 0.3f, 0.5f },
+        { "Tine Piano",         "Keys",      { 40, 0.2f, 0.9f, 0, 0, 0.0f, 1, 0.0f, 0.0f, true }, { 46, 0.1f, 0.35f, 0, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          4000.0f, 0.15f, 0, 0.7f, 0.1f, 0.1f, 0.0f, 2.0f, 1400.0f, 0.3f, 900.0f, 1.0f, 450.0f, 0.0f, 400.0f, 0.2f, 0.5f, 0.4f, 0.5f, 0.55f, 0.3f, 0.2f, 0.3f, 0.1f, 0.4f, 0.3f, 0.45f },
+        { "Kalimba Rain",       "Plucks",    { 38, 0.3f, 0.9f, 1, 0, 0.0f, 1, 0.0f, 0.0f, true }, { 39, 0.1f, 0.25f, 2, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          6000.0f, 0.2f, 0, 0.7f, 0.0f, 0.05f, 0.0f, 1.0f, 600.0f, 0.0f, 700.0f, 1.0f, 300.0f, 0.0f, 300.0f, 0.3f, 0.7f, 0.65f, 0.3f, 0.35f, 0.5f, 0.3f, 0.45f, 0.0f, 0.5f, 0.3f, 0.45f },
+        { "FM Bell Garden",     "Plucks",    { 45, 0.35f, 0.85f, 0, 0, 0.0f, 2, 0.15f, 0.7f, true }, { 0, 0.3f, 0.3f, 1, 0, 4.0f, 2, 0.2f, 0.8f, true },
+          9000.0f, 0.1f, 0, 0.6f, 0.0f, 0.1f, 0.0f, 1.0f, 1200.0f, 0.1f, 1500.0f, 1.0f, 500.0f, 0.0f, 400.0f, 0.4f, 0.85f, 0.75f, 0.3f, 0.3f, 0.55f, 0.3f, 0.6f, 0.0f, 0.6f, 0.3f, 0.55f },
+        { "Super Saw Sky",      "Leads",     { 41, 0.4f, 0.85f, 0, 0, 0.0f, 7, 0.5f, 1.0f, true }, { 41, 0.6f, 0.6f, 1, 0, -7.0f, 5, 0.4f, 1.0f, true },
+          8000.0f, 0.1f, 0, 0.3f, 0.1f, 0.2f, 0.0f, 20.0f, 600.0f, 0.9f, 900.0f, 10.0f, 400.0f, 0.3f, 400.0f, 0.3f, 0.8f, 0.6f, 0.3f, 0.4f, 0.5f, 0.3f, 0.5f, 0.1f, 0.9f, 0.3f, 0.5f },
+        { "Reese Floor",        "Bass",      { 47, 0.3f, 0.9f, -1, 0, 0.0f, 2, 0.1f, 0.4f, true }, { 46, 0.1f, 0.6f, -2, 0, 0.0f, 1, 0.0f, 0.0f, true },
+          1200.0f, 0.3f, 0, 0.5f, 0.3f, 0.0f, 30.0f, 3.0f, 400.0f, 0.9f, 250.0f, 2.0f, 400.0f, 0.2f, 250.0f, 0.05f, 0.3f, 0.3f, 0.6f, 0.6f, 0.1f, 0.2f, 0.1f, 0.3f, 0.3f, 0.3f, 0.4f },
+        { "808 Sub",            "Bass",      { 48, 0.2f, 1.0f, -1, 0, 0.0f, 1, 0.0f, 0.0f, true }, { 46, 0.0f, 0.4f, -2, 0, 0.0f, 1, 0.0f, 0.0f, false },
+          700.0f, 0.05f, 0, 0.4f, 0.15f, 0.0f, 60.0f, 1.0f, 900.0f, 0.6f, 300.0f, 1.0f, 500.0f, 0.0f, 200.0f, 0.0f, 0.3f, 0.3f, 0.6f, 0.6f, 0.0f, 0.1f, 0.0f, 0.2f, 0.2f, 0.2f, 0.4f },
     };
 
     int count() { return int(std::size(kPresets)); }
@@ -103,6 +174,58 @@ namespace Presets
         if (n == "Alien Keys")        { band(0, 2.0f, 0.3f, 0.0f); band(1, 7.0f, 0.4f, 3.0f); band(2, 11.0f, 0.3f, 2.5f); }
         if (n == "Siren Call")        { band(0, 3.0f, 0.5f, 2.5f); band(1, 5.0f, 0.4f, 0.3f); zwui::setLfo(apvts, 0, 0, false, 8, 5.5f); zwui::setModSlot(apvts, 0, 1, 1, 0.08f); }
         if (n == "Ion Growl")         { band(0, 3.0f, 0.4f, 3.0f); band(1, 8.0f, 0.6f, 0.2f); zwui::setLfo(apvts, 0, 7, true, 10, 1.0f); zwui::setModSlot(apvts, 0, 1, 3, 0.40f); zwui::setModSlot(apvts, 1, 1, 1, 0.30f); }
+        // ---- cinematic
+        if (n == "Interstellar Organ") { zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.25f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 10, 0.2f);
+                                        setParam(apvts, ParamIDs::spacePre, 30.0f); setParam(apvts, ParamIDs::spaceLow, 120.0f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.3f); setParam(apvts, ParamIDs::glueTime, 0.9f); setParam(apvts, ParamIDs::glueUp, 0.6f);
+                                        setParam(apvts, ParamIDs::eqOn(0), 1.0f); setParam(apvts, ParamIDs::eqGain(0), -2.5f); }
+        if (n == "Pandora Dawn")       { band(0, 3.0f, 0.5f, 1.8f); band(1, 7.0f, 0.6f, 0.4f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.35f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.3f); zwui::setModSlot(apvts, 2, 2, 13, 0.15f);
+                                        setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::spacePre, 50.0f); setParam(apvts, ParamIDs::eqOn(3), 1.0f); setParam(apvts, ParamIDs::eqGain(3), 2.0f); }
+        if (n == "Dark Horizon")       { band(0, 1.0f, 0.4f, 1.3f); band(1, 5.0f, 0.8f, 0.3f); zwui::setLfo(apvts, 0, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 3, 0.3f); zwui::setLfo(apvts, 1, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.25f);
+                                        setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 0.0f); setParam(apvts, ParamIDs::satDrive, 0.25f); setParam(apvts, ParamIDs::satLow, 100.0f); setParam(apvts, ParamIDs::satMix, 0.5f);
+                                        setParam(apvts, ParamIDs::spaceLow, 150.0f); setParam(apvts, ParamIDs::spacePre, 20.0f); }
+        if (n == "Frozen Cathedral")   { band(0, 2.0f, 0.3f, 0.5f); band(1, 6.0f, 0.5f, 1.6f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 24, 0.12f);
+                                        setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::spacePre, 60.0f); setParam(apvts, ParamIDs::spaceLow, 140.0f); setParam(apvts, ParamIDs::eqOn(3), 1.0f); setParam(apvts, ParamIDs::eqGain(3), 1.5f); }
+        if (n == "Slow Sunrise")       { zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 2, 0.4f); zwui::setModSlot(apvts, 1, 3, 3, 0.5f);
+                                        setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.35f); setParam(apvts, ParamIDs::glueTime, 1.0f); setParam(apvts, ParamIDs::spacePre, 40.0f); setParam(apvts, ParamIDs::spaceLow, 110.0f); }
+        if (n == "Deep Space Drone")   { band(0, 1.0f, 0.3f, 1.4f); band(1, 3.0f, 0.4f, 1.3f); band(2, 8.0f, 1.0f, 0.3f); zwui::setLfo(apvts, 0, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.2f);
+                                        setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.3f); setParam(apvts, ParamIDs::satBias, 0.3f); setParam(apvts, ParamIDs::satLow, 80.0f); setParam(apvts, ParamIDs::satMix, 0.6f); setParam(apvts, ParamIDs::spaceLow, 160.0f); }
+        if (n == "Tidal Strings")      { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.35f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.2f); zwui::setModSlot(apvts, 2, 2, 7, 0.2f);
+                                        setParam(apvts, ParamIDs::spacePre, 35.0f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.25f); setParam(apvts, ParamIDs::glueTime, 0.8f); }
+        if (n == "Event Glass")        { band(0, 4.0f, 0.4f, 2.0f); band(1, 9.0f, 0.4f, 1.8f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.3f);
+                                        setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::spacePre, 70.0f); setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 9.0f); setParam(apvts, ParamIDs::echoFb, 0.5f); setParam(apvts, ParamIDs::echoMix, 0.15f); setParam(apvts, ParamIDs::echoTone, 0.65f); }
+        if (n == "Breathing Planet")   { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.45f); zwui::setModSlot(apvts, 1, 1, 3, 0.25f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 2, 2, 27, 0.2f);
+                                        setParam(apvts, ParamIDs::spacePre, 25.0f); setParam(apvts, ParamIDs::spaceLow, 130.0f); }
+        if (n == "Last Transmission")  { band(0, 2.0f, 0.3f, 0.3f); band(1, 5.0f, 0.5f, 2.0f); zwui::setLfo(apvts, 0, 7, true, 8, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.25f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.3f);
+                                        setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.55f); setParam(apvts, ParamIDs::echoMix, 0.3f); setParam(apvts, ParamIDs::echoTone, 0.3f); setParam(apvts, ParamIDs::echoWobble, 0.35f);
+                                        setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 0.0f); setParam(apvts, ParamIDs::satDrive, 0.3f); setParam(apvts, ParamIDs::satTone, 0.3f); setParam(apvts, ParamIDs::satMix, 0.6f); }
+        // ---- vocal
+        if (n == "Ahh Choir")          { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.25f); setParam(apvts, ParamIDs::spacePre, 40.0f); setParam(apvts, ParamIDs::spaceLow, 150.0f);
+                                        setParam(apvts, ParamIDs::eqOn(1), 1.0f); setParam(apvts, ParamIDs::eqFreq(1), 320.0f); setParam(apvts, ParamIDs::eqGain(1), -2.0f); }
+        if (n == "Ooh Choir")          { zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.35f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 7, 0.2f); setParam(apvts, ParamIDs::spacePre, 50.0f); setParam(apvts, ParamIDs::spaceLow, 140.0f); }
+        if (n == "Monastery")          { band(0, 2.0f, 0.3f, 1.3f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.5f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.2f);
+                                        setParam(apvts, ParamIDs::spacePre, 80.0f); setParam(apvts, ParamIDs::spaceLow, 120.0f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.3f); setParam(apvts, ParamIDs::glueTime, 0.9f); }
+        if (n == "Soul Hum")           { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.4f); zwui::setModSlot(apvts, 1, 3, 3, 0.3f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.2f); setParam(apvts, ParamIDs::satBias, 0.25f); setParam(apvts, ParamIDs::satMix, 0.5f); }
+        if (n == "Gospel Pad")         { zwui::setLfo(apvts, 0, 0, false, 10, 5.2f); zwui::setModSlot(apvts, 0, 1, 1, 0.06f); zwui::setLfo(apvts, 1, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.3f);
+                                        setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.3f); setParam(apvts, ParamIDs::echoMix, 0.12f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.3f); }
+        if (n == "Angel Host")         { band(0, 6.0f, 0.5f, 1.6f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.3f);
+                                        setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::spacePre, 60.0f); setParam(apvts, ParamIDs::spaceLow, 180.0f); }
+        if (n == "Throat Singer")      { zwui::setLfo(apvts, 0, 1, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.5f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.15f); setParam(apvts, ParamIDs::spaceLow, 160.0f); }
+        if (n == "Whisper Wind")       { zwui::setLfo(apvts, 0, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.5f); zwui::setLfo(apvts, 1, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.35f); zwui::setModSlot(apvts, 2, 2, 13, 0.2f); setParam(apvts, ParamIDs::spacePre, 40.0f); setParam(apvts, ParamIDs::spaceLow, 250.0f); }
+        if (n == "Lullaby Voice")      { zwui::setLfo(apvts, 0, 0, false, 10, 4.8f); zwui::setModSlot(apvts, 0, 1, 1, 0.05f); setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 8.0f); setParam(apvts, ParamIDs::echoFb, 0.35f); setParam(apvts, ParamIDs::echoMix, 0.18f); setParam(apvts, ParamIDs::echoTone, 0.35f); setParam(apvts, ParamIDs::spacePre, 30.0f); }
+        if (n == "Soul Lead")          { zwui::setLfo(apvts, 0, 0, false, 10, 5.5f); zwui::setModSlot(apvts, 0, 1, 1, 0.08f); zwui::setEnv(apvts, 5.0f, 300.0f, 0.3f, 300.0f); zwui::setModSlot(apvts, 1, 3, 3, 0.4f);
+                                        setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.35f); setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.35f); setParam(apvts, ParamIDs::echoMix, 0.2f); }
+        // ---- atmosphere II / keys / plucks / bass
+        if (n == "Aurora Field")       { zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.5f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.3f); setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::spacePre, 45.0f); }
+        if (n == "Nimbus Cloud")       { zwui::setLfo(apvts, 0, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.4f); zwui::setLfo(apvts, 1, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.3f); setParam(apvts, ParamIDs::spacePre, 30.0f); setParam(apvts, ParamIDs::spaceLow, 120.0f); }
+        if (n == "Celesta Dream")      { setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.4f); setParam(apvts, ParamIDs::echoMix, 0.22f); setParam(apvts, ParamIDs::echoTone, 0.6f); setParam(apvts, ParamIDs::spacePre, 20.0f); }
+        if (n == "Music Box Memory")   { setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 9.0f); setParam(apvts, ParamIDs::echoFb, 0.45f); setParam(apvts, ParamIDs::echoMix, 0.25f); setParam(apvts, ParamIDs::echoTone, 0.4f); setParam(apvts, ParamIDs::echoWobble, 0.5f); setParam(apvts, ParamIDs::spaceShimmer, 1.0f); }
+        if (n == "Tine Piano")         { setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.3f); setParam(apvts, ParamIDs::satBias, 0.35f); zwui::setLfo(apvts, 0, 0, false, 10, 0.8f); zwui::setModSlot(apvts, 0, 1, 7, 0.15f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.35f); setParam(apvts, ParamIDs::glueTime, 0.3f); }
+        if (n == "Kalimba Rain")       { setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.5f); setParam(apvts, ParamIDs::echoMix, 0.3f); setParam(apvts, ParamIDs::echoTone, 0.55f); setParam(apvts, ParamIDs::echoWidth, 1.0f); }
+        if (n == "FM Bell Garden")     { zwui::setEnv(apvts, 1.0f, 400.0f, 0.0f, 300.0f); zwui::setModSlot(apvts, 0, 3, 1, 0.5f); setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.4f); setParam(apvts, ParamIDs::echoMix, 0.2f); setParam(apvts, ParamIDs::spaceShimmer, 1.0f); }
+        if (n == "Super Saw Sky")      { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.4f); setParam(apvts, ParamIDs::eqOn(0), 1.0f); setParam(apvts, ParamIDs::eqGain(0), -4.0f); setParam(apvts, ParamIDs::spacePre, 20.0f); }
+        if (n == "Reese Floor")        { setParam(apvts, ParamIDs::spaceOn, 0.0f); zwui::setLfo(apvts, 0, 0, true, 10, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.4f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 0.0f); setParam(apvts, ParamIDs::satDrive, 0.4f); setParam(apvts, ParamIDs::satLow, 110.0f);
+                                        setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.5f); setParam(apvts, ParamIDs::glueUp, 0.3f); setParam(apvts, ParamIDs::glueTime, 0.4f); }
+        if (n == "808 Sub")            { setParam(apvts, ParamIDs::spaceOn, 0.0f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 0.0f); setParam(apvts, ParamIDs::satDrive, 0.25f); setParam(apvts, ParamIDs::satMix, 0.4f); zwui::setEnv(apvts, 1.0f, 120.0f, 0.0f, 100.0f); zwui::setModSlot(apvts, 0, 3, 1, 0.4f); }
         if (n == "Dune Lead")         { zwui::setEnv(apvts, 2.0f, 200.0f, 0.3f, 200.0f); setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.35f); setParam(apvts, ParamIDs::echoMix, 0.2f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.35f); }
         if (n == "Choir of Glass")    { setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::spacePre, 40.0f); }
         if (n == "Cold Nebula")       { setParam(apvts, ParamIDs::spacePre, 60.0f); setParam(apvts, ParamIDs::spaceLow, 160.0f); }

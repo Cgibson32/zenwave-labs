@@ -14,12 +14,13 @@
 #include <memory>
 #include <cmath>
 #include <complex>
+#include "Tables.h"
 
 namespace nebula {
 
-constexpr int kFrameLen = 1024, kFrames = 32, kMips = 6, kPartials = 384, kCarveBands = 8, kTables = 8;
+constexpr int kFrameLen = 1024, kFrames = 32, kMips = 6, kPartials = 384, kCarveBands = 8, kTables = 49;
 
-inline const juce::StringArray& tableNames() { static const juce::StringArray n { "Glass", "Voice", "Metal", "Grain", "Dune", "Halo", "Ion", "Void" }; return n; }
+inline const juce::StringArray& tableNames() { return allTableNames(); }
 
 // Harmonic recipe: amplitude + phase per partial for a given table and frame position (0..1)
 inline void recipe(int table, float pos, float* amp, float* phase, juce::Random& rng)
@@ -27,6 +28,7 @@ inline void recipe(int table, float pos, float* amp, float* phase, juce::Random&
     for (int h = 0; h < kPartials; ++h) { amp[h] = 0.0f; phase[h] = 0.0f; }
     auto set = [&](int h, float a, float ph = 0.0f) { if (h >= 1 && h <= kPartials) { amp[h - 1] = a; phase[h - 1] = ph; } };
     const float t = pos;
+    if (table >= kLegacyTables) { recipeEx(table, t, amp, phase, rng); return; }
     switch (table)
     {
         case 0: // Glass: pure odd/even bell partials that migrate upward; sine -> glassy chime
@@ -146,8 +148,10 @@ public:
                 }
                 fft.perform(spec.data(), time.data(), true);
                 float* dst = out->data.data() + size_t((m * kFrames + f) * (kFrameLen + 1));
-                float pk = 1e-6f; for (int i = 0; i < kFrameLen; ++i) pk = std::max(pk, std::fabs(time[size_t(i)].real()));
-                for (int i = 0; i < kFrameLen; ++i) dst[i] = time[size_t(i)].real() / pk * 0.9f;
+                float pk = 1e-6f, sq = 0.0f; for (int i = 0; i < kFrameLen; ++i) { const float v = time[size_t(i)].real(); pk = std::max(pk, std::fabs(v)); sq += v * v; }
+                const float rms = std::sqrt(sq / kFrameLen) + 1e-6f;
+                const float gain = std::min(0.9f / pk, 0.28f / rms);        // frames match in loudness, never clip
+                for (int i = 0; i < kFrameLen; ++i) dst[i] = time[size_t(i)].real() * gain;
                 dst[kFrameLen] = dst[0];
             }
         }

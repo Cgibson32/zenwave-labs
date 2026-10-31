@@ -8,13 +8,13 @@ namespace NebulaManual
         using S = zwui::ManualSection;
         std::vector<S> v;
         v.push_back({ "QUICK START", "Nebula is a two-oscillator wavetable synth built around a planet: the sphere is oscillator A's table, the orbit is oscillator B, the halo is the harmonic spectrum you can carve by hand.",
-            { { "1", "Pick a preset. Atmosphere = pads that sit behind the track, then Keys, Plucks, Leads, Bass." },
+            { { "1", "Pick a preset. CINEMATIC = score-ready pads, VOCAL = choirs and voices, Atmosphere = pads that sit behind the track, then Keys, Plucks, Leads, Bass." },
               { "2", "Play. The lit ring on the planet is POSITION - turn it (or let MOVEMENT do it) and the wave morphs through the table." },
               { "3", "Shape with the eight MACROS: WARMTH, AIR, MOVEMENT, SPACE, GRIT, WIDTH, ATTACK, RELEASE. Every preset is designed to be played from these." },
               { "4", "Carve: click the halo to place a band on a harmonic, drag it up to boost or down to cut. It changes the wave itself, so it costs nothing per voice." } } });
 
         v.push_back({ "OSCILLATORS", "A is the planet, B is the ring. Each has:",
-            { { "Table", "Glass (bells, chimes), Voice (vowel formants), Metal (inharmonic clusters), Grain (dense texture), Dune (saw - square - pulse), Halo (fundamental + shimmering cluster), Ion (bright buzz with sliding combs), Void (dark sub, upper partials only at the top)." },
+            { { "Table", "49 tables in six families. CLASSIC: Glass, Voice, Metal, Grain, Dune, Halo, Ion, Void. VOCAL: sixteen tables built from measured vowel formants (soprano / alto / tenor / bass) - Ahh Choir, Ooh Choir, Mmm Hum, Om Chant, Soul Vox, Alto Breath, Soprano Air, Bass Monk, Whisper, Vowel Sweep, Gospel Oh, Lullaby, Throat Drone, Siren Vox, Choir Stack, Angelic; POSITION moves the mouth through the vowels. ATMOSPHERE: Aurora, Nimbus, Stratus, Solaris, Tide, Deep Field, Dust - slow spectral weather for pads. ORCHESTRAL: Ensemble, Cello Body, Brass Swell, Flute, Bowed Glass. BELLS + KEYS: Celesta, Music Box, Kalimba, Crystal, Tine. ANALOGUE: Super Saw, PWM, Tri Fold, Drawbars, FM Bell. SUB: Deep Sub, Reese, 808 Tone. Vocal tables are pitched for their voice type (bass around C2, soprano around E4) - play them in that register and they speak; play them elsewhere and they become instruments of their own." },
               { "POSITION", "Where you are in the table's 32 frames. The one knob that defines the sound; modulate it from an LFO, the step lane or the envelope for living timbre.", "aposition" },
               { "POSITION", "Oscillator B's position in its table.", "bposition" },
               { "LEVEL", "Oscillator level.", "alevel" }, { "LEVEL", "Oscillator B level (AIR raises it).", "blevel" },
