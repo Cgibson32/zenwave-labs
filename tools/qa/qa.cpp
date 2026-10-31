@@ -16,6 +16,7 @@ struct Stats { float peak = 0; bool finite = true; int clicks = 0; };
 // 2 ms fades, so any click the detector finds is the plugin's, not the source's.
 static double kickPhase = 0.0, leadPhase = 0.0, hatPhase = 0.0;
 static bool continuousSignal = false;   // distortion plugins: no gates (a clipper turns any fade into a step)
+static bool isSynth = false;            // instruments: no input, a note pattern drives the test instead
 static float smoothGate(double pos, double len, double fade = 0.002)
 {
     if (pos < 0 || pos > len) return 0.0f;
@@ -82,10 +83,25 @@ static Stats run(juce::AudioProcessor& p, int blocks, double& t, double sr, juce
 {
     Stats s;
     std::vector<float> chan[2];
+    static const int pattern[4] = { 48, 55, 60, 67 }; static int noteIdx = 0; static bool noteDown = false; static double lastNoteT = -1.0;
     for (int k = 0; k < blocks; ++k)
     {
-        fill(b, t, sr);
+        if (isSynth)
+        {
+            b.clear(); mb.clear();
+            // every 0.5 s: note off (if held) then note on the next pattern note; chord on every 4th
+            if (lastNoteT < 0 || t - lastNoteT >= 0.5)
+            {
+                if (noteDown) { for (int v = 0; v < 3; ++v) mb.addEvent(juce::MidiMessage::noteOff(1, pattern[(noteIdx + 3) % 4] + v * 4), 0); }
+                const int n0 = pattern[noteIdx % 4];
+                mb.addEvent(juce::MidiMessage::noteOn(1, n0, 0.8f), 1); mb.addEvent(juce::MidiMessage::noteOn(1, n0 + 4, 0.7f), 1); mb.addEvent(juce::MidiMessage::noteOn(1, n0 + 8, 0.6f), 1);
+                noteDown = true; ++noteIdx; lastNoteT = t;
+            }
+            t += b.getNumSamples() / sr;
+        }
+        else fill(b, t, sr);
         p.processBlock(b, mb);
+        if (isSynth) mb.clear();
         for (int c = 0; c < 2; ++c)
         {
             const float* d = b.getReadPointer(c);
@@ -127,6 +143,7 @@ int main()
     juce::AudioBuffer<float> b(2, block); juce::MidiBuffer mb; double t = 0; float last[2] = { 0, 0 };
 
     continuousSignal = proc->getName().containsIgnoreCase("Core");
+    isSynth = proc->acceptsMidi();
     std::printf("== %s: %d parameters, %d presets%s\n", proc->getName().toRawUTF8(), proc->getParameters().size(), proc->getNumPrograms(), continuousSignal ? " (continuous test signal)" : "");
 
     // 1) Every preset: process 2 s, check sanity
@@ -138,7 +155,8 @@ int main()
         QA_CHECK(s.finite, "preset '%s' produced NaN/Inf", proc->getProgramName(pr).toRawUTF8());
         QA_CHECK(s.peak < 1.6f, "preset '%s' peak %.2f (> +4 dBFS)", proc->getProgramName(pr).toRawUTF8(), s.peak);
         const bool crusher = proc->getProgramName(pr).containsIgnoreCase("Bit") || proc->getProgramName(pr).containsIgnoreCase("Crush");   // stepped by design
-        QA_CHECK(s.clicks <= (crusher ? 8 : 0), "preset '%s' had %d clicks", proc->getProgramName(pr).toRawUTF8(), s.clicks);
+        const int allowed = crusher ? 8 : (isSynth ? 8 : 0);   // a synth's fast note-on attacks are transients, not faults (<= one per onset, 2 channels)
+        QA_CHECK(s.clicks <= allowed, "preset '%s' had %d clicks", proc->getProgramName(pr).toRawUTF8(), s.clicks);
         std::printf("  preset %-26s peak %5.2f  clicks %d\n", proc->getProgramName(pr).toRawUTF8(), s.peak, s.clicks);
     }
 
@@ -162,7 +180,7 @@ int main()
         QA_CHECK(total.peak < 4.1f, "param '%s' sweep peak %.2f", rp->getName(32).toRawUTF8(), total.peak);
         // Allow a few transitions for switches (sync/division/slope/freeze) — those change delay time legitimately
         const bool isSwitch = dynamic_cast<juce::AudioParameterBool*>(param) || dynamic_cast<juce::AudioParameterChoice*>(param);
-        QA_CHECK(total.clicks <= (isSwitch ? 24 : 2), "param '%s' sweep had %d clicks", rp->getName(32).toRawUTF8(), total.clicks);
+        QA_CHECK(total.clicks <= (isSwitch ? 24 : (isSynth ? 14 : 2)), "param '%s' sweep had %d clicks", rp->getName(32).toRawUTF8(), total.clicks);
         std::printf("  param  %-26s peak %5.2f  clicks %d%s\n", rp->getName(32).toRawUTF8(), total.peak, total.clicks, isSwitch ? " (switch)" : "");
     }
 
@@ -207,7 +225,7 @@ int main()
             }
             QA_CHECK(total.finite, "modulation shape %d produced NaN/Inf", shape);
             QA_CHECK(total.peak < 4.1f, "modulation shape %d peak %.2f", shape, total.peak);
-            QA_CHECK(total.clicks <= 2, "modulation shape %d had %d clicks", shape, total.clicks);
+            QA_CHECK(total.clicks <= (isSynth ? 10 : 2), "modulation shape %d had %d clicks", shape, total.clicks);
             std::printf("  mod    shape %d across %d targets   peak %5.2f  clicks %d\n", shape, numTargets, total.peak, total.clicks);
         }
         for (int i = 1; i <= 4; ++i) set("mod" + juce::String(i) + "src", 0.0f);

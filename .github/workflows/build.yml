@@ -32,13 +32,14 @@ jobs:
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DZENWAVE_BUILD_TESTS=OFF -DZENWAVE_BUILD_QA=ON
       - name: Build QA tools
-        run: cmake --build build --config Release --target DriftQA UmbraQA CoreQA PulseQA --parallel 4
+        run: cmake --build build --config Release --target DriftQA UmbraQA CoreQA PulseQA NebulaQA --parallel 4
       - name: Run QA (every preset, every parameter, bypass, state)
         run: |
           xvfb-run -a build/tools/qa/DriftQA_artefacts/Release/DriftQA
           xvfb-run -a build/tools/qa/UmbraQA_artefacts/Release/UmbraQA
           xvfb-run -a build/tools/qa/CoreQA_artefacts/Release/CoreQA
           xvfb-run -a build/tools/qa/PulseQA_artefacts/Release/PulseQA
+          xvfb-run -a build/tools/qa/NebulaQA_artefacts/Release/NebulaQA
 
   build:
     name: ${{ matrix.name }}
@@ -61,11 +62,11 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DZENWAVE_BUILD_TESTS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
       - name: Build
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_VST3 Drift_Standalone Umbra_VST3 Umbra_Standalone Core_VST3 Core_Standalone Pulse_VST3 Pulse_Standalone --parallel 4
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_VST3 Drift_Standalone Umbra_VST3 Umbra_Standalone Core_VST3 Core_Standalone Pulse_VST3 Pulse_Standalone Nebula_VST3 Nebula_Standalone --parallel 4
 
       - name: Build AU (macOS only)
         if: runner.os == 'macOS'
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_AU Umbra_AU Core_AU Pulse_AU --parallel 4
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target Drift_AU Umbra_AU Core_AU Pulse_AU Nebula_AU --parallel 4
 
       # --- Code signing & notarization (macOS). Secrets are added once in the repo settings:
       #   APPLE_CERT_P12 (base64), APPLE_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
@@ -82,12 +83,13 @@ jobs:
           bash tools/mac_sign_notarize.sh build/plugins/umbra/Umbra_artefacts/Release
           bash tools/mac_sign_notarize.sh build/plugins/core/Core_artefacts/Release
           bash tools/mac_sign_notarize.sh build/plugins/pulse/Pulse_artefacts/Release
+          bash tools/mac_sign_notarize.sh build/plugins/nebula/Nebula_artefacts/Release
 
       - name: Collect artifacts
         shell: bash
         run: |
           mkdir -p out
-          for P in Drift Umbra Core Pulse; do
+          for P in Drift Umbra Core Pulse Nebula; do
             plug=$(echo $P | tr 'A-Z' 'a-z')
             A=build/plugins/$plug/${P}_artefacts
             [ -d "$A/Release" ] && A="$A/Release"

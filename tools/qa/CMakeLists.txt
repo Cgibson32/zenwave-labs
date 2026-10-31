@@ -1,5 +1,5 @@
 # Headless QA: preset + parameter sweep for each plugin (run in CI on Linux).
-foreach(P Drift Umbra Core Pulse)
+foreach(P Drift Umbra Core Pulse Nebula)
   string(TOLOWER ${P} plow)
   juce_add_console_app(${P}QA PRODUCT_NAME "${P}QA")
   juce_generate_juce_header(${P}QA)

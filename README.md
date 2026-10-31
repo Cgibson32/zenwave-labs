@@ -70,3 +70,7 @@ Three-band saturator for bass music. LR4 crossovers (drag the lines in the spect
 ## PULSE - multiband dynamics (v0.7)
 
 Three-band upward/downward compressor (the OTT idea) with adaptive thresholds (AUTO), 3 ms lookahead, program-dependent release, transient shaper (ATTACK / SUSTAIN), pattern duck (Steps LFO -> DUCK) and external sidechain, GRIT, and a four-node dynamic EQ drawn on the spectrum. MATCH places the splits and trims output so out = in. 19 presets, same shell as the rest of the line.
+
+## NEBULA - planetary wavetable synth (v0.8)
+
+Two oscillators on eight procedurally generated, band-limited wavetables (Glass, Voice, Metal, Grain, Dune, Halo, Ion, Void), 32 frames each. The planet centrepiece draws oscillator A as a sphere of rings, B as its orbit, playing voices as moons and the harmonic spectrum as a halo. CARVE: up to 8 hand-placed harmonic bands (centre, width, gain) rendered into the wavetable. Per-voice SVF filter + drive, two ADSRs, unison with mono-safe spread and drift, Umbra's reverb as SPACE, sidechain DUCK so pads sit behind the track, eight macros, Motion matrix, on-screen keyboard, 14 presets.

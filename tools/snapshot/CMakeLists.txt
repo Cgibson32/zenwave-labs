@@ -1,5 +1,5 @@
 # Headless editor screenshot tool: renders each plugin's editor to PNG (used in CI and for design review).
-foreach(P Drift Umbra Core Pulse)
+foreach(P Drift Umbra Core Pulse Nebula)
   string(TOLOWER ${P} plow)
   juce_add_console_app(${P}Snapshot PRODUCT_NAME "${P}Snapshot")
   juce_generate_juce_header(${P}Snapshot)

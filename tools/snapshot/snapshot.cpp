@@ -9,8 +9,10 @@ int main(int argc, char** argv)
     // Run some stereo audio through so the visualisers have content
     {
         juce::AudioBuffer<float> b(2, 512); juce::MidiBuffer mb; double ph = 0;
+        if (proc->acceptsMidi()) { mb.addEvent(juce::MidiMessage::noteOn(1, 48, 0.8f), 0); mb.addEvent(juce::MidiMessage::noteOn(1, 55, 0.7f), 0); mb.addEvent(juce::MidiMessage::noteOn(1, 64, 0.7f), 0); }
         for (int blk = 0; blk < 60; ++blk)
         {
+            if (proc->acceptsMidi()) { b.clear(); proc->processBlock(b, mb); mb.clear(); continue; }
             for (int i = 0; i < 512; ++i)
             {
                 const double t = (blk * 512 + i) / 48000.0;
