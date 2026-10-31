@@ -57,13 +57,22 @@ namespace NebulaManual
               { "RELEASE", "Scales the amp release 0.1x - 10x.", "mrelease" },
               { "Mod wheel / aftertouch", "Both push the filter open and act as pressure - expressive without any setup." } } });
 
-        v.push_back({ "FX PAGE", "The VOICE / FX tabs switch the middle band. FX is the patch's own processing chain, in order: EQ -> SATURATE -> GLUE -> ECHO -> SPACE.",
+        v.push_back({ "FX PAGE", "The VOICE / FX tabs switch the middle band. FX is the patch's own processing chain, in order: EQ -> SATURATE -> GLUE -> ECHO -> SPACE. Every module has an on/off and every knob can be modulated; it all saves with the preset.",
             { { "EQ", "Four nodes on the synth's live output spectrum. Click the display to place a node, drag to move it (frequency / gain), or use the NODE buttons and FREQ / GAIN / Q knobs. Types: bell, low shelf, high shelf, low cut, high cut. Node gains are modulation targets - a slow LFO on a high shelf is a breathing pad.", "eq1freq" },
               { "GAIN", "Selected node gain.", "eq1gain" }, { "Q", "Selected node width.", "eq1q" },
-              { "SATURATE", "Core-style tape stage over the whole patch. DRIVE = how hard, MIX = parallel blend.", "satdrive" }, { "MIX", "Saturation blend.", "satmix" },
-              { "GLUE", "A single-band Pulse compressor: upward and downward, adaptive thresholds. DEPTH is the amount, TIME scales attack and release. Pads stay even, plucks get dense. GR shows the live gain change.", "gluedepth" }, { "TIME", "Glue timing scale.", "gluetime" },
-              { "ECHO", "Synced ping-pong delay with a filtered, gently saturating feedback loop. SYNC + division or TIME in ms; FEEDBACK, MIX, TONE (dark to bright repeats).", "echofb" },
-              { "TIME", "Echo time when SYNC is off.", "echotime" }, { "MIX", "Echo level.", "echomix" }, { "TONE", "Feedback filter: left = dark dub repeats, right = bright.", "echotone" } } });
+              { "SATURATE", "Core's waveshapers over the whole patch, 2x oversampled. Pick a character: Tape (soft), Tube (warm, even harmonics), Fold (wavefolder - turns pads into synth leads), Rectify, Crush (bit + rate reduction), Diode (buzzy), Octave (full-wave fuzz, an octave up), Hard (digital clip).", "satdrive" },
+              { "TONE", "Tilt into the shaper: left = drive the lows (fat), right = drive the highs (fizz).", "sattone" },
+              { "BIAS", "Asymmetry: adds even harmonics for a tube-like thickness.", "satbias" },
+              { "LOW", "Keep lows: everything below this frequency bypasses the shaper and stays clean. Set it around 100-150 Hz on bass patches so the sub never folds.", "satlow" },
+              { "OUT", "Trim after the shaper.", "satout" }, { "MIX", "Parallel blend.", "satmix" },
+              { "GLUE", "A single-band Pulse compressor: upward and downward, adaptive thresholds. DEPTH is the amount, TIME scales attack and release. Pads stay even, plucks get dense. GR shows the live gain change.", "gluedepth" },
+              { "UP / DOWN", "How much of the upward (lift quiet parts) and downward (tame loud parts) halves to apply. UP 0 = a classic compressor, DOWN 0 = pure upward expansion.", "glueup" },
+              { "MIX", "Parallel compression blend.", "gluemix" }, { "OUT", "Make-up gain.", "glueout" },
+              { "ECHO", "Synced ping-pong delay with a filtered, gently saturating feedback loop. SYNC + division or TIME in ms; FDBK, MIX, TONE (dark to bright repeats).", "echofb" },
+              { "WOBBLE", "Tape wow on the delay time - repeats drift in pitch. A little is lush, a lot is seasick.", "echowobble" },
+              { "WIDTH", "Stereo width of the repeats: left = mono, right = extra wide.", "echowidth" },
+              { "SPACE", "Umbra's reverb at the end of the chain. SIZE, DECAY, MIX, DARK (damping), PRE (pre-delay: separates the attack from the tail so pads stay clear), LOW CUT (keeps the reverb out of the bass). SHIMMER feeds an octave-up copy of the tail back in. Stereo width follows the WIDTH macro.", "spacesize" },
+              { "PRE", "Pre-delay in ms.", "spacepre" }, { "LOW CUT", "Reverb low cut.", "spacelow" } } });
         v.push_back(zwui::motionSection());
         v.push_back(zwui::presetSection());
         v.push_back({ "RECIPES", "",

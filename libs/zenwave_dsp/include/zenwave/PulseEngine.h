@@ -93,8 +93,8 @@ public:
         // OTT law: above ref+2 compress 3:1, below ref-2 expand upward 3:1 (bounded to +18 dB)
         float g = 0.0f;
         const float over = lvl - (ref + 2.0f), under = (ref - 2.0f) - lvl;
-        if (over > 0.0f) g = -over * 0.67f;
-        else if (under > 0.0f) g = std::min(under * 0.67f, 18.0f);
+        if (over > 0.0f) g = -over * 0.67f * downAmt;
+        else if (under > 0.0f) g = std::min(under * 0.67f, 18.0f) * upAmt;
         depth += (depthTarget - depth) * depthK;                  // depth glides (~25 ms) so modulated depth never steps the gain
         g *= depth;
         grDb += (g - grDb) * 0.02f;                               // gain path smoothing (anti-zipper)
@@ -102,7 +102,9 @@ public:
     }
     float gainReductionDb() const { return grDb; }
     float density() const { return dens; }
+    void setBalance(float up, float down) { upAmt = clampf(up, 0.0f, 1.0f); downAmt = clampf(down, 0.0f, 1.0f); }
 private:
+    float upAmt = 1.0f, downAmt = 1.0f;
     double fs = 48000.0; float baseA = 10.0f, baseR = 100.0f, aK = 0.01f, rKbase = 100.0f, depth = 1.0f, depthTarget = 1.0f, depthK = 0.001f; bool adapt = true;
     float env = 0, slowAvg = -30.0f, slowK = 0.00001f, dens = 0, densFast = 0, densSlow = 0, densFastK = 0.01f, densSlowK = 0.001f, grDb = 0.0f;
 };

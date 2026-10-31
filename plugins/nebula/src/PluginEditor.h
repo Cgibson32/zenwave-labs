@@ -48,10 +48,11 @@ private:
     juce::Rectangle<int> eqDisplay;
     int eqDrag = -1;
     void mouseDown(const juce::MouseEvent&) override; void mouseDrag(const juce::MouseEvent&) override; void mouseUp(const juce::MouseEvent&) override;
-    juce::ToggleButton satButton { "SATURATE" }, glueButton { "GLUE" }, echoButton { "ECHO" }, echoSyncButton { "SYNC" }, echoPPButton { "PING-PONG" };
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> satAttach, glueAttach, echoAttach, echoSyncAttach, echoPPAttach;
-    juce::ComboBox echoDivBox; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> echoDivAttach;
-    zwui::Knob satDrive, satMix, glueDepth, glueTime, echoTime, echoFb, echoMix, echoTone;
+    juce::ToggleButton satButton { "SATURATE" }, glueButton { "GLUE" }, echoButton { "ECHO" }, echoSyncButton { "SYNC" }, echoPPButton { "PING-PONG" }, spaceButton { "SPACE" }, shimmerButton { "SHIMMER" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> satAttach, glueAttach, echoAttach, echoSyncAttach, echoPPAttach, spaceAttach, shimmerAttach;
+    juce::ComboBox echoDivBox, satTypeBox; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> echoDivAttach, satTypeAttach;
+    zwui::Knob satDrive, satTone, satMix, satBias, satLow, satOut, glueDepth, glueTime, glueMix, glueUp, glueDown, glueOut,
+               echoTime, echoFb, echoMix, echoTone, echoWobble, echoWidth, spaceMix, spacePre, spaceLow;
     juce::ToggleButton powerButton; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttach;
     zwui::ModPanel modPanel { processor.apvts, processor.mod, lnf };
     zwui::PresetBar presetBar;

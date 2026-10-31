@@ -339,10 +339,25 @@ private:
 struct FxParams
 {
     EqNode eq[4];
-    bool satOn = false; float satDrive = 0.3f, satMix = 1.0f;
-    bool glueOn = false; float glueDepth = 0.5f, glueTime = 0.5f;
-    bool echoOn = false; float echoTimeMs = 375.0f; float echoFeedback = 0.4f, echoMix = 0.25f, echoTone = 0.5f; bool echoPingPong = true;
+    bool satOn = false; int satType = 0; float satDrive = 0.3f, satTone = 0.0f, satBias = 0.0f, satLowHz = 20.0f, satOutDb = 0.0f, satMix = 1.0f;
+    bool glueOn = false; float glueDepth = 0.5f, glueTime = 0.5f, glueUp = 1.0f, glueDown = 1.0f, glueMix = 1.0f, glueOutDb = 0.0f;
+    bool echoOn = false; float echoTimeMs = 375.0f; float echoFeedback = 0.4f, echoMix = 0.25f, echoTone = 0.5f, echoWobble = 0.0f, echoWidth = 0.66f; bool echoPingPong = true;
 };
+
+// waveshapers shared with CORE's band shaper: 0 Tape 1 Tube 2 Fold 3 Rectify 4 Crush(handled outside) 5 Diode 6 Octave 7 Hard
+inline float fxShape(int type, float v) noexcept
+{
+    switch (type)
+    {
+        case 1:  { const float t = zw::fastTanh(v * 0.7f); return t + 0.18f * t * t * (v > 0 ? 1.0f : -1.0f); }
+        case 2:  return std::sin(zw::clampf(v, -6.2f, 6.2f) * 0.9f) * 0.95f;
+        case 3:  { const float r = v >= 0 ? v : -v * 0.35f; return zw::fastTanh(r * 1.2f) - 0.25f; }
+        case 5:  { const float a = v >= 0 ? 1.0f : 2.2f; return zw::fastTanh(v * a) / (v >= 0 ? 1.0f : 1.6f); }
+        case 6:  { const float r = std::fabs(v); return zw::fastTanh(r * 1.5f) * 0.9f - 0.45f; }
+        case 7:  return zw::clampf(v, -0.8f, 0.8f) * 1.1f;
+        default: return zw::fastTanh(v);
+    }
+}
 
 class FxChain
 {
@@ -352,17 +367,25 @@ public:
         fs = sr;
         for (auto& b : eq) b.reset();
         glue.prepare(sr, 6.0f, 90.0f);
-        for (int c = 0; c < 2; ++c) { dl[c].prepare(sr, 2.5f); tone[c].setSampleRate(sr); tone[c].setLowpass(8000.0f); hp[c].setSampleRate(sr); hp[c].setHighpass(120.0f); satDC[c].setSampleRate(sr); satDC[c].setHighpass(10.0f); }
-        for (auto* s : { &smSatMix, &smGlueMix, &smEchoMix, &smEchoFb, &smEchoTime, &smSatDrive }) { s->setSampleRate(sr); s->setTime(30.0f); }
+        for (int c = 0; c < 2; ++c)
+        {
+            dl[c].prepare(sr, 2.5f); tone[c].setSampleRate(sr); tone[c].setLowpass(8000.0f); hp[c].setSampleRate(sr); hp[c].setHighpass(120.0f);
+            satDC[c].setSampleRate(sr); satDC[c].setHighpass(10.0f); satLow[c].setSampleRate(sr); satLow[c].setLowpass(20.0f); satTilt[c].setSampleRate(sr); satTilt[c].reset(); satOS[c].reset();
+        }
+        wobble.setSampleRate(sr); wobble.setRate(0.23f); wobble.setShape(zw::LFO::Shape::Sine); wobble.reset(0.0f);
+        for (auto* s : { &smSatMix, &smGlueMix, &smEchoMix, &smEchoFb, &smEchoTime, &smSatDrive, &smSatOut, &smGlueOut, &smCrush }) { s->setSampleRate(sr); s->setTime(30.0f); }
         smEchoTime.setTime(80.0f);
-        set(params); smEchoTime.reset(float(params.echoTimeMs * 0.001 * sr)); smEchoMix.reset(0.0f); smSatMix.reset(0.0f); smGlueMix.reset(0.0f);
+        set(params); smEchoTime.reset(float(params.echoTimeMs * 0.001 * sr)); smEchoMix.reset(0.0f); smSatMix.reset(0.0f); smGlueMix.reset(0.0f); smSatOut.reset(1.0f); smGlueOut.reset(1.0f);
     }
     void set(const FxParams& p)
     {
         params = p;
         for (int i = 0; i < 4; ++i) { eqOn[i] = p.eq[i].on; if (p.eq[i].on) eq[i].set(p.eq[i], fs); }
-        smSatMix.setTarget(p.satOn ? p.satMix : 0.0f); smSatDrive.setTarget(p.satDrive);
-        smGlueMix.setTarget(p.glueOn ? 1.0f : 0.0f); glue.set(p.glueDepth, p.glueTime, 1.0f, 1.0f, true);
+        smSatMix.setTarget(p.satOn ? p.satMix : 0.0f); smSatDrive.setTarget(p.satDrive); smSatOut.setTarget(zw::dbToGain(p.satOutDb));
+        for (auto& f : satLow) f.setLowpass(zw::clampf(p.satLowHz, 20.0f, 500.0f));
+        for (auto& t : satTilt) t.setTilt(p.satTone);
+        smCrush.setTarget(p.satType == 4 ? 1.0f : 0.0f);
+        smGlueMix.setTarget(p.glueOn ? p.glueMix : 0.0f); smGlueOut.setTarget(zw::dbToGain(p.glueOutDb)); glue.set(p.glueDepth, p.glueTime, 1.0f, 1.0f, true); glue.setBalance(p.glueUp, p.glueDown);
         smEchoMix.setTarget(p.echoOn ? p.echoMix : 0.0f); smEchoFb.setTarget(zw::clampf(p.echoFeedback, 0.0f, 0.95f));
         smEchoTime.setTarget(float(zw::clampf(p.echoTimeMs, 10.0f, 2400.0f) * 0.001 * fs));
         for (auto& t : tone) t.setLowpass(zw::lerp(1500.0f, 14000.0f, p.echoTone));
@@ -374,18 +397,50 @@ public:
             float l = L[i], r = R[i];
             // EQ
             for (int k = 0; k < 4; ++k) if (eqOn[k]) { l = eq[k].process(0, l); r = eq[k].process(1, r); }
-            // Saturate
-            { const float m = smSatMix.next(), d = smSatDrive.next(); if (m > 0.0005f) { const float g = 1.0f + d * d * 12.0f; const float sl = satDC[0].process(zw::fastTanh(l * g) / std::sqrt(g)), sr_ = satDC[1].process(zw::fastTanh(r * g) / std::sqrt(g)); l = zw::lerp(l, sl, m); r = zw::lerp(r, sr_, m); } }
-            // Glue (single-band OTT, adaptive)
-            { const float m = smGlueMix.next(); const float g = glue.process(l, r); if (m > 0.0005f) { const float gg = zw::lerp(1.0f, g, m); l *= gg; r *= gg; } glueGrVis = glue.gainReductionDb(); }
+            // Saturate: lows below LOW stay clean, TONE tilts into the shaper, 2x oversampled waveshaper with BIAS, OUT trim, MIX
+            {
+                const float m = smSatMix.next(), d = smSatDrive.next(), og = smSatOut.next(), crush = smCrush.next();
+                if (m > 0.0005f)
+                {
+                    const float g = 1.0f + d * d * 14.0f, bias = params.satBias * 0.6f, norm = 1.0f / std::sqrt(g);
+                    const bool split = params.satLowHz > 22.0f;
+                    float in[2] = { l, r }, outv[2];
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        const float low = split ? satLow[c].process(in[c]) : 0.0f;
+                        float x = satTilt[c].process(in[c] - low);
+                        float y;
+                        if (crush > 0.5f)   // Crush: sample/bit reduction, no oversampling needed (the aliasing *is* the character)
+                        {
+                            const float steps = 4.0f + (1.0f - d) * 60.0f; const float q = std::round(x * g * steps) / steps;
+                            if (++crushCnt[c] >= 1 + int(d * 6.0f)) { crushCnt[c] = 0; crushHold[c] = q; }
+                            y = crushHold[c] * norm;
+                        }
+                        else
+                        {
+                            float u0, u1; satOS[c].upsample(x * g, u0, u1);
+                            const int t = params.satType;
+                            u0 = fxShape(t, u0 + bias) - fxShape(t, bias); u1 = fxShape(t, u1 + bias) - fxShape(t, bias);
+                            y = satOS[c].downsample(u0, u1) * norm;
+                        }
+                        outv[c] = satDC[c].process(y) * og + low;
+                    }
+                    l = zw::lerp(l, outv[0], m); r = zw::lerp(r, outv[1], m);
+                }
+            }
+            // Glue (single-band OTT, adaptive, UP / DOWN balance, parallel MIX, OUT)
+            { const float m = smGlueMix.next(), og = smGlueOut.next(); const float g = glue.process(l, r); if (m > 0.0005f) { const float gg = zw::lerp(1.0f, g * og, m); l *= gg; r *= gg; } glueGrVis = glue.gainReductionDb(); }
             // Echo (ping-pong, filtered feedback)
             {
-                const float m = smEchoMix.next(), fb = smEchoFb.next(), tSamp = smEchoTime.next();
-                const float dL = dl[0].read(tSamp), dR = dl[1].read(tSamp);
+                const float m = smEchoMix.next(), fb = smEchoFb.next();
+                const float wob = wobble.next() * params.echoWobble * 0.006f * float(fs);     // up to +-6 ms tape wow
+                const float tSamp = std::max(2.0f, smEchoTime.next() + wob);
+                const float dL = dl[0].read(tSamp), dR = dl[1].read(tSamp * (params.echoPingPong ? 1.0f : 1.0f));
                 const float inL = hp[0].process(l), inR = hp[1].process(r);
                 const float fbL = tone[0].process(params.echoPingPong ? dR : dL) * fb, fbR = tone[1].process(params.echoPingPong ? dL : dR) * fb;
                 dl[0].write(zw::fastTanh(inL + fbL)); dl[1].write(zw::fastTanh(inR + fbR));
-                l += dL * m; r += dR * m;
+                const float mid = 0.5f * (dL + dR), side = 0.5f * (dL - dR) * params.echoWidth * 1.5f;
+                l += (mid + side) * m; r += (mid - side) * m;
             }
             L[i] = l; R[i] = r;
         }
@@ -396,8 +451,9 @@ private:
     double fs = 48000.0; FxParams params;
     Biquad eq[4]; bool eqOn[4] = { false, false, false, false };
     zw::OttBand glue;
-    zw::DelayLine dl[2]; zw::OnePole tone[2], hp[2], satDC[2];
-    zw::Smoother smSatMix, smSatDrive, smGlueMix, smEchoMix, smEchoFb, smEchoTime;
+    zw::DelayLine dl[2]; zw::OnePole tone[2], hp[2], satDC[2], satLow[2]; zw::TiltEQ satTilt[2]; zw::Oversampler2x satOS[2]; zw::LFO wobble;
+    float crushHold[2] = { 0, 0 }; int crushCnt[2] = { 0, 0 };
+    zw::Smoother smSatMix, smSatDrive, smSatOut, smCrush, smGlueMix, smGlueOut, smEchoMix, smEchoFb, smEchoTime;
 };
 
 } // namespace nebula

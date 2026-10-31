@@ -30,6 +30,10 @@ NebulaAudioProcessor::NebulaAudioProcessor()
     for (int i = 0; i < 8; ++i) pMacro[i] = apvts.getRawParameterValue(macroIds[i]);
     pVolume = apvts.getRawParameterValue(ParamIDs::volume); pPower = apvts.getRawParameterValue(ParamIDs::power);
     pDuck = apvts.getRawParameterValue(ParamIDs::duck); pDuckRelease = apvts.getRawParameterValue(ParamIDs::duckRelease);
+    pSatType = apvts.getRawParameterValue(ParamIDs::satType); pSatBias = apvts.getRawParameterValue(ParamIDs::satBias); pSatLow = apvts.getRawParameterValue(ParamIDs::satLow); pSatOut = apvts.getRawParameterValue(ParamIDs::satOut);
+    pGlueUp = apvts.getRawParameterValue(ParamIDs::glueUp); pGlueDown = apvts.getRawParameterValue(ParamIDs::glueDown); pGlueMix = apvts.getRawParameterValue(ParamIDs::glueMix); pGlueOut = apvts.getRawParameterValue(ParamIDs::glueOut);
+    pEchoWidth = apvts.getRawParameterValue(ParamIDs::echoWidth);
+    pSpaceOn = apvts.getRawParameterValue(ParamIDs::spaceOn); pSpacePre = apvts.getRawParameterValue(ParamIDs::spacePre); pSpaceLow = apvts.getRawParameterValue(ParamIDs::spaceLow); pSpaceShimmer = apvts.getRawParameterValue(ParamIDs::spaceShimmer);
     for (int i = 0; i < 4; ++i) { pEqOn[i] = apvts.getRawParameterValue(ParamIDs::eqOn(i)); pEqType[i] = apvts.getRawParameterValue(ParamIDs::eqType(i)); pEqFreq[i] = apvts.getRawParameterValue(ParamIDs::eqFreq(i)); pEqQ[i] = apvts.getRawParameterValue(ParamIDs::eqQ(i)); }
     pSatOn = apvts.getRawParameterValue(ParamIDs::satOn); pSatMix = apvts.getRawParameterValue(ParamIDs::satMix);
     pGlueOn = apvts.getRawParameterValue(ParamIDs::glueOn); pGlueTime = apvts.getRawParameterValue(ParamIDs::glueTime);
@@ -134,16 +138,31 @@ APVTS::ParameterLayout NebulaAudioProcessor::createLayout()
         params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::eqQ(i), 1 }, n + "Q", Rng{ 0.2f, 12.0f, 0.01f, 0.4f }, 1.0f,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return "Q " + juce::String(v, 1); })));
     }
+    auto dbAttr = juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(v, 1) + " dB"; });
+    auto biAttr = juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { const int p = juce::roundToInt(v * 100.0f); return (p > 0 ? "+" : "") + juce::String(p) + " %"; });
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::satOn, 1 }, "Saturate", false));
-    params.push_back(pct(ParamIDs::satDrive, "Sat Drive", 0.3f)); params.push_back(pct(ParamIDs::satMix, "Sat Mix", 1.0f));
+    params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::satType, 1 }, "Sat Type", juce::StringArray{ "Tape", "Tube", "Fold", "Rectify", "Crush", "Diode", "Octave", "Hard" }, 0));
+    params.push_back(pct(ParamIDs::satDrive, "Sat Drive", 0.3f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::satTone, 1 }, "Sat Tone", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f, biAttr));
+    params.push_back(pct(ParamIDs::satBias, "Sat Bias", 0.0f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::satLow, 1 }, "Sat Keep Lows", Rng{ 20.0f, 500.0f, 0.1f, 0.4f }, 20.0f, hzAttr));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::satOut, 1 }, "Sat Out", Rng{ -12.0f, 12.0f, 0.1f }, 0.0f, dbAttr));
+    params.push_back(pct(ParamIDs::satMix, "Sat Mix", 1.0f));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::glueOn, 1 }, "Glue", false));
     params.push_back(pct(ParamIDs::glueDepth, "Glue Depth", 0.5f)); params.push_back(pct(ParamIDs::glueTime, "Glue Time", 0.5f));
+    params.push_back(pct(ParamIDs::glueUp, "Glue Up", 1.0f)); params.push_back(pct(ParamIDs::glueDown, "Glue Down", 1.0f)); params.push_back(pct(ParamIDs::glueMix, "Glue Mix", 1.0f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::glueOut, 1 }, "Glue Out", Rng{ -12.0f, 12.0f, 0.1f }, 0.0f, dbAttr));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::echoOn, 1 }, "Echo", false));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::echoSync, 1 }, "Echo Sync", true));
     params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::echoDiv, 1 }, "Echo Division", zwui::divisionNames(), 7));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::echoTime, 1 }, "Echo Time", Rng{ 20.0f, 2000.0f, 0.1f, 0.4f }, 375.0f, msAttr));
     params.push_back(pct(ParamIDs::echoFb, "Echo Feedback", 0.4f)); params.push_back(pct(ParamIDs::echoMix, "Echo Mix", 0.25f)); params.push_back(pct(ParamIDs::echoTone, "Echo Tone", 0.5f));
+    params.push_back(pct(ParamIDs::echoWobble, "Echo Wobble", 0.0f)); params.push_back(pct(ParamIDs::echoWidth, "Echo Width", 0.66f));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::echoPP, 1 }, "Echo Ping-Pong", true));
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::spaceOn, 1 }, "Space On", true));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::spacePre, 1 }, "Space Pre-Delay", Rng{ 0.0f, 250.0f, 0.1f, 0.5f }, 0.0f, msAttr));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::spaceLow, 1 }, "Space Low Cut", Rng{ 20.0f, 800.0f, 0.1f, 0.4f }, 90.0f, hzAttr));
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::spaceShimmer, 1 }, "Space Shimmer", false));
     params.push_back(pct(ParamIDs::duck, "Duck", 0.0f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::duckRelease, 1 }, "Duck Release", Rng{ 20.0f, 1500.0f, 1.0f, 0.5f }, 250.0f, msAttr));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::volume, 1 }, "Volume", Rng{ -36.0f, 6.0f, 0.1f }, -6.0f,
@@ -186,6 +205,9 @@ void NebulaAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     for (auto* s : { &smSpaceMix, &smVolume, &smPower }) { s->setSampleRate(sampleRate); s->setTime(30.0f); }
     smSpaceMix.reset(pSpaceMix->load()); smVolume.reset(zw::dbToGain(pVolume->load())); smPower.reset(pPower->load() > 0.5f ? 1.0f : 0.0f);
     for (auto& f : scLP) { f.setSampleRate(sampleRate); f.setLowpass(200.0f); }
+    for (int c = 0; c < 2; ++c) { spacePreDl[c].prepare(sampleRate, 0.3f); shimmer[c].prepare(sampleRate); shimLP[c].setSampleRate(sampleRate); shimLP[c].setLowpass(5500.0f); shimHP[c].setSampleRate(sampleRate); shimHP[c].setHighpass(180.0f); }
+    for (auto* sm : { &smSpacePre, &smSpaceOn, &smShimmer }) { sm->setSampleRate(sampleRate); sm->setTime(40.0f); }
+    smSpacePre.setTime(120.0f); smSpacePre.reset(pSpacePre->load() * 0.001f * float(sampleRate)); smSpaceOn.reset(pSpaceOn->load() > 0.5f ? 1.0f : 0.0f); smShimmer.reset(0.0f); lastWetL = lastWetR = 0.0f;
     mod.prepare(sampleRate);
     meterOut.prepare(sampleRate);
     wet.setSize(2, samplesPerBlock);
@@ -222,15 +244,18 @@ void NebulaAudioProcessor::updateVoiceParams()
     vp.modA = pModEnv[0]->load(); vp.modD = pModEnv[1]->load(); vp.modS = pModEnv[2]->load(); vp.modR = pModEnv[3]->load();
     vp.glideMs = pGlide->load();
     for (auto& v : voices) v.setParams(vp);
-    reverb.setSize(pSpaceSize->load()); reverb.setDecay(pSpaceDecay->load());
-    reverb.setDamping(zw::lerp(12000.0f, 2500.0f, pSpaceDark->load()) * (0.7f + 0.6f * air)); reverb.setDiffusion(0.7f); reverb.setModDepth(0.3f + 0.4f * movement);
+    reverb.setSize(juce::jlimit(0.0f, 1.0f, M(ModT::SpaceSize))); reverb.setDecay(juce::jlimit(0.0f, 1.0f, M(ModT::SpaceDecay)));
+    reverb.setDamping(zw::lerp(12000.0f, 2500.0f, juce::jlimit(0.0f, 1.0f, M(ModT::SpaceDark))) * (0.7f + 0.6f * air)); reverb.setDiffusion(0.7f); reverb.setModDepth(0.3f + 0.4f * movement);
+    reverb.setLoopHighpass(pSpaceLow->load());
+    spaceWidthCur = 0.4f + juce::jlimit(0.0f, 1.0f, width) * 0.9f;     // reverb stereo width rides the WIDTH macro
+    smSpacePre.setTarget(pSpacePre->load() * 0.001f * float(currentSampleRate)); smSpaceOn.setTarget(pSpaceOn->load() > 0.5f ? 1.0f : 0.0f); smShimmer.setTarget(pSpaceShimmer->load() > 0.5f ? 1.0f : 0.0f);
     smSpaceMix.setTarget(juce::jlimit(0.0f, 1.0f, M(ModT::SpaceMix) * (0.3f + 1.4f * pMacro[3]->load())));
     // FX chain
     const int eqG[4] = { ModT::Eq1Gain, ModT::Eq2Gain, ModT::Eq3Gain, ModT::Eq4Gain };
     for (int i = 0; i < 4; ++i) { fxp.eq[i].on = pEqOn[i]->load() > 0.5f; fxp.eq[i].type = int(pEqType[i]->load()); fxp.eq[i].freq = pEqFreq[i]->load(); fxp.eq[i].gainDb = M(eqG[i]); fxp.eq[i].q = pEqQ[i]->load(); }
-    fxp.satOn = pSatOn->load() > 0.5f; fxp.satDrive = M(ModT::SatDrive); fxp.satMix = pSatMix->load();
-    fxp.glueOn = pGlueOn->load() > 0.5f; fxp.glueDepth = M(ModT::GlueDepth); fxp.glueTime = pGlueTime->load();
-    fxp.echoOn = pEchoOn->load() > 0.5f; fxp.echoFeedback = M(ModT::EchoFb); fxp.echoMix = M(ModT::EchoMix); fxp.echoTone = M(ModT::EchoTone); fxp.echoPingPong = pEchoPP->load() > 0.5f;
+    fxp.satOn = pSatOn->load() > 0.5f; fxp.satType = int(pSatType->load()); fxp.satDrive = M(ModT::SatDrive); fxp.satTone = juce::jlimit(-1.0f, 1.0f, M(ModT::SatTone)); fxp.satBias = pSatBias->load(); fxp.satLowHz = pSatLow->load(); fxp.satOutDb = pSatOut->load(); fxp.satMix = pSatMix->load();
+    fxp.glueOn = pGlueOn->load() > 0.5f; fxp.glueDepth = M(ModT::GlueDepth); fxp.glueTime = pGlueTime->load(); fxp.glueUp = pGlueUp->load(); fxp.glueDown = pGlueDown->load(); fxp.glueMix = pGlueMix->load(); fxp.glueOutDb = pGlueOut->load();
+    fxp.echoOn = pEchoOn->load() > 0.5f; fxp.echoFeedback = M(ModT::EchoFb); fxp.echoMix = M(ModT::EchoMix); fxp.echoTone = M(ModT::EchoTone); fxp.echoWobble = juce::jlimit(0.0f, 1.0f, M(ModT::EchoWobble)); fxp.echoWidth = pEchoWidth->load(); fxp.echoPingPong = pEchoPP->load() > 0.5f;
     fxp.echoTimeMs = pEchoSync->load() > 0.5f ? float(zwui::divisionSeconds(int(pEchoDiv->load()), hostBpm) * 1000.0) : pEchoTime->load();
     fx.set(fxp);
     smVolume.setTarget(zw::dbToGain(pVolume->load()));
@@ -320,9 +345,18 @@ void NebulaAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         smPower.setTarget(pPower->load() > 0.5f ? 1.0f : 0.0f);
         for (int i = 0; i < n; ++i)
         {
-            const float mix = smSpaceMix.next(), vol = smVolume.next() * smPower.next();
+            const float mix = smSpaceMix.next() * smSpaceOn.next(), vol = smVolume.next() * smPower.next(), pre = smSpacePre.next(), sh = smShimmer.next();
             float wl = 0.0f, wr = 0.0f;
-            reverb.process(L[i], R[i], wl, wr);
+            spacePreDl[0].write(L[i]); spacePreDl[1].write(R[i]);
+            float inL = pre < 1.0f ? L[i] : spacePreDl[0].read(pre), inR = pre < 1.0f ? R[i] : spacePreDl[1].read(pre);
+            if (sh > 0.001f)   // shimmer: octave-up copy of the tail fed back into the input
+            {
+                inL += shimLP[0].process(shimHP[0].process(shimmer[0].process(lastWetL))) * 0.42f * sh;
+                inR += shimLP[1].process(shimHP[1].process(shimmer[1].process(lastWetR))) * 0.42f * sh;
+            }
+            reverb.process(inL, inR, wl, wr);
+            lastWetL = wl; lastWetR = wr;
+            { const float w = spaceWidthCur, m = 0.5f * (wl + wr), sd = 0.5f * (wl - wr) * w; wl = m + sd; wr = m - sd; }
             float l = L[i] + wl * mix * 1.2f, r = R[i] + wr * mix * 1.2f;
             float scLevel = 0.0f;
             if (scL) scLevel = std::max(std::fabs(scLP[0].process(scL[i])), std::fabs(scLP[1].process(scR[i])));

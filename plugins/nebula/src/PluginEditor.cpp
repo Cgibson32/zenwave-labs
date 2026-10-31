@@ -1,6 +1,6 @@
 #include "PluginEditor.h"
 
-static constexpr float kW = 1040.0f, kH = 980.0f;
+static constexpr float kW = 1040.0f, kH = 1060.0f;
 
 NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p),
@@ -53,20 +53,28 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     addAndMakeVisible(eqTypeBox); eqTypeBox.addItemList({ "Bell", "Low Shelf", "High Shelf", "Low Cut", "High Cut" }, 1); eqTypeBox.setTooltip("Node type");
     eqFreq.init(*this, s, "eq1freq", "FREQ", false, false); eqGain.init(*this, s, "eq1gain", "GAIN", false, false); eqQ.init(*this, s, "eq1q", "Q", false, false);
     attachEq(0);
-    for (auto* b : { &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton }) addAndMakeVisible(b);
+    for (auto* b : { &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton, &spaceButton, &shimmerButton }) addAndMakeVisible(b);
+    spaceAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::spaceOn, spaceButton);
+    shimmerAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::spaceShimmer, shimmerButton);
+    spaceButton.setTooltip("Space: Umbra's reverb at the end of the chain"); shimmerButton.setTooltip("Shimmer: an octave-up copy of the tail feeds back into the reverb - choirs and glass");
+    addAndMakeVisible(satTypeBox); satTypeBox.addItemList({ "Tape", "Tube", "Fold", "Rectify", "Crush", "Diode", "Octave", "Hard" }, 1); satTypeBox.setTooltip("Saturation character: Tape soft / Tube warm 2nd / Fold wavefold / Rectify / Crush bit+rate / Diode buzzy / Octave fuzz / Hard clip");
+    satTypeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(s, ParamIDs::satType, satTypeBox);
     satAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::satOn, satButton);
     glueAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::glueOn, glueButton);
     echoAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::echoOn, echoButton);
     echoSyncAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::echoSync, echoSyncButton);
     echoPPAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::echoPP, echoPPButton);
-    satButton.setTooltip("Saturate: Core-style tape stage on the whole patch"); glueButton.setTooltip("Glue: a single-band Pulse compressor - upward and downward, adaptive. Pads stay even, plucks get dense.");
+    satButton.setTooltip("Saturate: Core's waveshapers on the whole patch, 2x oversampled. LOW keeps the sub clean, TONE tilts into the drive, BIAS adds even harmonics."); glueButton.setTooltip("Glue: a single-band Pulse compressor - upward and downward, adaptive. Pads stay even, plucks get dense.");
     echoButton.setTooltip("Echo: synced stereo delay with a filtered, saturating feedback loop"); echoSyncButton.setTooltip("Echo time follows the host tempo"); echoPPButton.setTooltip("Ping-pong: repeats alternate left / right");
     addAndMakeVisible(echoDivBox); echoDivBox.addItemList(zwui::divisionNames(), 1); echoDivBox.setTooltip("Echo division when SYNC is on");
     echoDivAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(s, ParamIDs::echoDiv, echoDivBox);
-    satDrive.init(*this, s, ParamIDs::satDrive, "DRIVE", false, false); satMix.init(*this, s, ParamIDs::satMix, "MIX", false, false);
-    glueDepth.init(*this, s, ParamIDs::glueDepth, "DEPTH", false, false); glueTime.init(*this, s, ParamIDs::glueTime, "TIME", false, false);
-    echoTime.init(*this, s, ParamIDs::echoTime, "TIME", false, false); echoFb.init(*this, s, ParamIDs::echoFb, "FDBK", false, false);
-    echoMix.init(*this, s, ParamIDs::echoMix, "MIX", false, false); echoTone.init(*this, s, ParamIDs::echoTone, "TONE", false, false);
+    satDrive.init(*this, s, ParamIDs::satDrive, "DRIVE", false, false); satTone.init(*this, s, ParamIDs::satTone, "TONE", false, false); satMix.init(*this, s, ParamIDs::satMix, "MIX", false, false);
+    satBias.init(*this, s, ParamIDs::satBias, "BIAS", false, false); satLow.init(*this, s, ParamIDs::satLow, "LOW", false, false); satOut.init(*this, s, ParamIDs::satOut, "OUT", false, false);
+    glueDepth.init(*this, s, ParamIDs::glueDepth, "DEPTH", false, false); glueTime.init(*this, s, ParamIDs::glueTime, "TIME", false, false); glueMix.init(*this, s, ParamIDs::glueMix, "MIX", false, false);
+    glueUp.init(*this, s, ParamIDs::glueUp, "UP", false, false); glueDown.init(*this, s, ParamIDs::glueDown, "DOWN", false, false); glueOut.init(*this, s, ParamIDs::glueOut, "OUT", false, false);
+    echoTime.init(*this, s, ParamIDs::echoTime, "TIME", false, false); echoFb.init(*this, s, ParamIDs::echoFb, "FDBK", false, false); echoMix.init(*this, s, ParamIDs::echoMix, "MIX", false, false);
+    echoTone.init(*this, s, ParamIDs::echoTone, "TONE", false, false); echoWobble.init(*this, s, ParamIDs::echoWobble, "WOBBLE", false, false); echoWidth.init(*this, s, ParamIDs::echoWidth, "WIDTH", false, false);
+    spaceMix.init(*this, s, ParamIDs::spaceMix, "MIX", false, false); spacePre.init(*this, s, ParamIDs::spacePre, "PRE", false, false); spaceLow.init(*this, s, ParamIDs::spaceLow, "LO CUT", false, false);
 
     addAndMakeVisible(powerButton); powerButton.getProperties().set("round", true); powerButton.setTooltip("Power: smooth output mute");
     powerAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::power, powerButton);
@@ -83,7 +91,8 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     keyboard.setColour(juce::MidiKeyboardComponent::textLabelColourId, zwui::Palette::dim);
 
     allKnobs = { &cutoff, &res, &envAmt, &keyTrack, &drive, &spaceSize, &spaceDecay, &spaceDark, &duck, &duckRel, &glide, &drift, &volume,
-                 &satDrive, &satMix, &glueDepth, &glueTime, &echoTime, &echoFb, &echoMix, &echoTone, &eqFreq, &eqGain, &eqQ };
+                 &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
+                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ };
     for (int o = 0; o < 2; ++o) for (auto* k : { &osc[o].position, &osc[o].level, &osc[o].octave, &osc[o].semis, &osc[o].fine, &osc[o].unison, &osc[o].spread, &osc[o].width }) allKnobs.push_back(k);
     for (int i = 0; i < 4; ++i) { allKnobs.push_back(&ampK[i]); allKnobs.push_back(&modK[i]); }
     for (int i = 0; i < 8; ++i) allKnobs.push_back(&macro[i]);
@@ -98,7 +107,7 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
 
     setPage(0);
     setResizable(true, true);
-    setResizeLimits(832, 784, 1664, 1568);
+    setResizeLimits(832, 848, 1664, 1696);
     getConstrainer()->setFixedAspectRatio(double(kW) / double(kH));
     setSize(int(kW), int(kH));
     lastTick = juce::Time::getMillisecondCounterHiRes();
@@ -112,14 +121,14 @@ void NebulaAudioProcessorEditor::setPage(int p)
     page = p;
     const bool voice = p == 0;
     for (auto* c : std::initializer_list<juce::Component*>{ &carveButton, &cutoff.slider, &cutoff.label, &res.slider, &res.label, &envAmt.slider, &envAmt.label, &keyTrack.slider, &keyTrack.label, &drive.slider, &drive.label, &filterModeBox,
-                                                            &spaceSize.slider, &spaceSize.label, &spaceDecay.slider, &spaceDecay.label, &spaceDark.slider, &spaceDark.label, &duck.slider, &duck.label, &duckRel.slider, &duckRel.label,
+                                                            &duck.slider, &duck.label, &duckRel.slider, &duckRel.label,
                                                             &glide.slider, &glide.label, &drift.slider, &drift.label, &volume.slider, &volume.label })
         c->setVisible(voice);
+    for (auto* k : { &spaceSize, &spaceDecay, &spaceDark }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
     for (int i = 0; i < 4; ++i) { ampK[i].slider.setVisible(voice); ampK[i].label.setVisible(voice); modK[i].slider.setVisible(voice); modK[i].label.setVisible(voice); eqSel[i].setVisible(! voice); }
-    for (auto* c : std::initializer_list<juce::Component*>{ &eqOnButton, &eqTypeBox, &eqFreq.slider, &eqFreq.label, &eqGain.slider, &eqGain.label, &eqQ.slider, &eqQ.label,
-                                                            &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton, &echoDivBox,
-                                                            &satDrive.slider, &satDrive.label, &satMix.slider, &satMix.label, &glueDepth.slider, &glueDepth.label, &glueTime.slider, &glueTime.label,
-                                                            &echoTime.slider, &echoTime.label, &echoFb.slider, &echoFb.label, &echoMix.slider, &echoMix.label, &echoTone.slider, &echoTone.label })
+    for (auto* k : { &eqFreq, &eqGain, &eqQ, &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
+                     &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
+    for (auto* c : std::initializer_list<juce::Component*>{ &eqOnButton, &eqTypeBox, &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton, &echoDivBox, &satTypeBox, &spaceButton, &shimmerButton })
         c->setVisible(! voice);
     voiceTab.setToggleState(voice, juce::dontSendNotification); fxTab.setToggleState(! voice, juce::dontSendNotification);
     repaint();
@@ -232,20 +241,30 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
     zwui::drawHeader(g, r, s, "NEBULA", "PLANETARY WAVETABLE SYNTH", lnf.accent, lnf.accentHi, lnf.accent2);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 88 * s, 250 * s, 336 * s), "OSC A", lnf.accent, lnf.accent2, s);
     zwui::drawCard(g, juce::Rectangle<float>(768 * s, 88 * s, 250 * s, 336 * s), "OSC B", lnf.accent2, lnf.accent, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 436 * s, 500 * s, 176 * s), page == 0 ? "CARVE  +  FILTER" : "EQ", lnf.accent, lnf.accent2, s);
-    zwui::drawCard(g, juce::Rectangle<float>(532 * s, 436 * s, 486 * s, 176 * s), page == 0 ? "ENVELOPES  +  SPACE" : "CHAIN   SATURATE  ->  GLUE  ->  ECHO  ->  SPACE", lnf.accent2, lnf.accent, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 624 * s, 996 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
-    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 806 * s, 996 * s, 96 * s), "MACROS", lnf.accent, lnf.accent2, s);
+    if (page == 0)
+    {
+        zwui::drawCard(g, juce::Rectangle<float>(22 * s, 436 * s, 500 * s, 256 * s), "CARVE  +  FILTER", lnf.accent, lnf.accent2, s);
+        zwui::drawCard(g, juce::Rectangle<float>(532 * s, 436 * s, 486 * s, 256 * s), "ENVELOPES  +  DUCK", lnf.accent2, lnf.accent, s);
+    }
+    else
+    {
+        zwui::drawCard(g, juce::Rectangle<float>(22 * s, 436 * s, 380 * s, 256 * s), "EQ", lnf.accent, lnf.accent2, s);
+        zwui::drawCard(g, juce::Rectangle<float>(412 * s, 436 * s, 606 * s, 256 * s), "CHAIN   EQ  ->  SATURATE  ->  GLUE  ->  ECHO  ->  SPACE", lnf.accent2, lnf.accent, s);
+    }
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 704 * s, 996 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
+    zwui::drawCard(g, juce::Rectangle<float>(22 * s, 886 * s, 996 * s, 96 * s), "MACROS", lnf.accent, lnf.accent2, s);
     g.setFont(juce::Font(juce::FontOptions(8.5f * s, juce::Font::bold))); g.setColour(lnf.accentHi);
     if (page == 0)
     {
         g.drawText("CARVE: click the halo to place a band (up to 8) - drag = harmonic / gain, Shift = width, double-click = remove", juce::Rectangle<float>(40 * s, 452 * s, 470 * s, 12 * s), juce::Justification::centredLeft);
         g.drawText("AMP", juce::Rectangle<float>(548 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText("MOD", juce::Rectangle<float>(780 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText("SPACE", juce::Rectangle<float>(548 * s, 538 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText(juce::String("DUCK (SC)") + (processor.sidechainPresent.load() ? "" : "  -  no input"), juce::Rectangle<float>(724 * s, 538 * s, 120 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText("GLUE", juce::Rectangle<float>(842 * s, 538 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(772 * s), 452 * s, 528 * s); g.drawVerticalLine(int(716 * s), 540 * s, 604 * s); g.drawVerticalLine(int(834 * s), 540 * s, 604 * s);
+        g.drawText("MOD", juce::Rectangle<float>(784 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
+        g.drawText(juce::String("DUCK (SC)") + (processor.sidechainPresent.load() ? "" : "  -  no input"), juce::Rectangle<float>(548 * s, 566 * s, 140 * s, 12 * s), juce::Justification::centredLeft);
+        g.drawText("VOICE", juce::Rectangle<float>(712 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
+        g.drawText("OUTPUT", juce::Rectangle<float>(876 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
+        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(774 * s), 452 * s, 552 * s); g.drawVerticalLine(int(700 * s), 566 * s, 684 * s); g.drawVerticalLine(int(864 * s), 566 * s, 684 * s);
+        // duck meter
+        { const float d = processor.duckVis.load(); g.setColour(zwui::Palette::dim.withAlpha(0.3f)); g.fillRoundedRectangle(548 * s, 666 * s, 136 * s, 4 * s, 2 * s); g.setColour(lnf.accent2); g.fillRoundedRectangle(548 * s, 666 * s, 136 * s * juce::jlimit(0.0f, 1.0f, d), 4 * s, 2 * s); }
     }
     else
     {
@@ -263,13 +282,14 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
             g.setColour(zwui::Palette::bg); g.setFont(juce::Font(juce::FontOptions(8.0f, juce::Font::bold))); g.drawText(juce::String(i + 1), int(c.x) - 6, int(c.y) - 6, 12, 12, juce::Justification::centred);
         }
         g.setFont(juce::Font(juce::FontOptions(8.5f * s, juce::Font::bold))); g.setColour(lnf.accentHi);
-        g.drawText("NODE " + juce::String(selectedEq + 1), juce::Rectangle<float>(352 * s, 452 * s, 100 * s, 12 * s), juce::Justification::centredLeft);
-        g.setColour(zwui::Palette::dim); g.drawText("click the display to place / drag nodes", juce::Rectangle<float>(40 * s, 452 * s, 300 * s, 12 * s), juce::Justification::centredLeft);
+        g.drawText("NODE " + juce::String(selectedEq + 1), juce::Rectangle<float>(222 * s, 452 * s, 100 * s, 12 * s), juce::Justification::centredLeft);
+        g.setColour(zwui::Palette::dim); g.drawText("click the display to place / drag nodes", juce::Rectangle<float>(40 * s, 452 * s, 180 * s, 12 * s), juce::Justification::centredLeft);
         // chain readouts
         g.setColour(zwui::Palette::dim); g.setFont(juce::Font(juce::FontOptions(8.0f * s, juce::Font::bold)));
         const float gr = processor.glueGr();
-        g.drawText("GR " + juce::String(gr > 0 ? "+" : "") + juce::String(gr, 1) + " dB", juce::Rectangle<float>(690 * s, 596 * s, 120 * s, 10 * s), juce::Justification::centredLeft);
-        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(680 * s), 452 * s, 604 * s); g.drawVerticalLine(int(820 * s), 452 * s, 604 * s);
+        g.drawText(glueButton.getToggleState() ? "GR " + juce::String(gr > 0 ? "+" : "") + juce::String(gr, 1) + " dB" : juce::String("GR  --"), juce::Rectangle<float>(578 * s, 668 * s, 120 * s, 10 * s), juce::Justification::centredLeft);
+        g.drawText("stereo width follows the WIDTH macro", juce::Rectangle<float>(874 * s, 668 * s, 140 * s, 10 * s), juce::Justification::centredLeft);
+        g.setColour(juce::Colours::white.withAlpha(0.06f)); for (int x : { 570, 718, 866 }) g.drawVerticalLine(int(x * s), 452 * s, 684 * s);
     }
     zwui::drawOrbit(g, { 520 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
@@ -300,29 +320,40 @@ void NebulaAudioProcessorEditor::resized()
         u.width.layout (x0 + S(168), S(306), S(72), S(96), S(12));
     }
     voiceTab.setBounds(S(846), S(428), S(70), S(18)); fxTab.setBounds(S(922), S(428), S(50), S(18));
-    eqDisplay = juce::Rectangle<int>(S(40), S(468), S(300), S(128));
-    for (int i = 0; i < 4; ++i) eqSel[i].setBounds(S(352 + i * 30), S(468), S(26), S(22));
-    eqOnButton.setBounds(S(480), S(467), S(24), S(24));
-    eqTypeBox.setBounds(S(352), S(496), S(152), S(22));
-    eqFreq.layout(S(352), S(540), S(48), S(48), S(10)); eqGain.layout(S(404), S(540), S(48), S(48), S(10)); eqQ.layout(S(456), S(540), S(48), S(48), S(10));
-    satButton.setBounds(S(548), S(468), S(90), S(22));
-    satDrive.layout(S(548), S(522), S(50), S(50), S(10)); satMix.layout(S(604), S(522), S(50), S(50), S(10));
-    glueButton.setBounds(S(690), S(468), S(70), S(22));
-    glueDepth.layout(S(690), S(522), S(50), S(50), S(10)); glueTime.layout(S(746), S(522), S(50), S(50), S(10));
-    echoButton.setBounds(S(830), S(468), S(60), S(22)); echoSyncButton.setBounds(S(894), S(468), S(50), S(22)); echoDivBox.setBounds(S(948), S(468), S(62), S(22));
-    echoTime.layout(S(830), S(522), S(44), S(44), S(10)); echoFb.layout(S(878), S(522), S(44), S(44), S(10)); echoMix.layout(S(926), S(522), S(44), S(44), S(10)); echoTone.layout(S(974), S(522), S(40), S(44), S(10));
-    echoPPButton.setBounds(S(830), S(580), S(90), S(18));
+    eqDisplay = juce::Rectangle<int>(S(40), S(468), S(342), S(140));
+    for (int i = 0; i < 4; ++i) eqSel[i].setBounds(S(40 + i * 30), S(618), S(26), S(22));
+    eqOnButton.setBounds(S(166), S(617), S(24), S(24));
+    eqTypeBox.setBounds(S(40), S(650), S(150), S(22));
+    eqFreq.layout(S(222), S(628), S(48), S(48), S(10)); eqGain.layout(S(276), S(628), S(48), S(48), S(10)); eqQ.layout(S(330), S(628), S(48), S(48), S(10));
+    {
+        auto mod = [&](int m, std::initializer_list<zwui::Knob*> row1, std::initializer_list<zwui::Knob*> row2)
+        {
+            const int x0 = 430 + m * 148; int k = 0;
+            for (auto* kn : row1) { kn->layout(S(x0 + k * 46), S(540), S(44), S(44), S(10)); ++k; } k = 0;
+            for (auto* kn : row2) { kn->layout(S(x0 + k * 46), S(608), S(44), S(44), S(10)); ++k; }
+            return x0;
+        };
+        int x = mod(0, { &satDrive, &satTone, &satMix }, { &satBias, &satLow, &satOut });
+        satButton.setBounds(S(x), S(468), S(96), S(22)); satTypeBox.setBounds(S(x), S(496), S(136), S(22));
+        x = mod(1, { &glueDepth, &glueTime, &glueMix }, { &glueUp, &glueDown, &glueOut });
+        glueButton.setBounds(S(x), S(468), S(70), S(22));
+        x = mod(2, { &echoTime, &echoFb, &echoMix }, { &echoTone, &echoWobble, &echoWidth });
+        echoButton.setBounds(S(x), S(468), S(60), S(22)); echoSyncButton.setBounds(S(x + 66), S(468), S(44), S(22)); echoDivBox.setBounds(S(x), S(496), S(136), S(22));
+        echoPPButton.setBounds(S(x), S(664), S(96), S(18));
+        x = mod(3, { &spaceSize, &spaceDecay, &spaceMix }, { &spaceDark, &spacePre, &spaceLow });
+        spaceButton.setBounds(S(x), S(468), S(66), S(22)); shimmerButton.setBounds(S(x + 70), S(468), S(66), S(22));
+    }
     carveButton.setBounds(S(40), S(470), S(70), S(24));
-    cutoff.layout(S(130), S(486), S(104), S(112), S(14));
-    res.layout(S(242), S(500), S(64), S(90), S(12)); envAmt.layout(S(310), S(500), S(64), S(90), S(12));
-    keyTrack.layout(S(378), S(500), S(64), S(90), S(12)); drive.layout(S(446), S(500), S(64), S(90), S(12));
+    cutoff.layout(S(130), S(498), S(120), S(130), S(14));
+    res.layout(S(258), S(520), S(62), S(96), S(12)); envAmt.layout(S(324), S(520), S(62), S(96), S(12));
+    keyTrack.layout(S(390), S(520), S(62), S(96), S(12)); drive.layout(S(456), S(520), S(62), S(96), S(12));
     filterModeBox.setBounds(S(40), S(504), S(80), S(22));
-    for (int i = 0; i < 4; ++i) { ampK[i].layout(S(548 + i * 54), S(474), S(50), S(50), S(10)); modK[i].layout(S(780 + i * 54), S(474), S(50), S(50), S(10)); }
-    zwui::Knob* row2[8] = { &spaceSize, &spaceDecay, &spaceDark, &duck, &duckRel, &glide, &drift, &volume };
-    const int row2x[8] = { 548, 602, 656, 724, 778, 842, 896, 950 };
-    for (int i = 0; i < 8; ++i) row2[i]->layout(S(row2x[i]), S(558), S(50), S(44), S(10));
-    modPanel.setBounds(S(22), S(624), S(996), S(170));
+    for (int i = 0; i < 4; ++i) { ampK[i].layout(S(548 + i * 56), S(480), S(54), S(54), S(10)); modK[i].layout(S(784 + i * 56), S(480), S(54), S(54), S(10)); }
+    duck.layout(S(548), S(596), S(54), S(54), S(10)); duckRel.layout(S(612), S(596), S(54), S(54), S(10));
+    glide.layout(S(712), S(596), S(54), S(54), S(10)); drift.layout(S(776), S(596), S(54), S(54), S(10));
+    volume.layout(S(900), S(590), S(64), S(64), S(10));
+    modPanel.setBounds(S(22), S(704), S(996), S(170));
     modPanel.layoutScaled(996.0f * s / 836.0f);
-    for (int i = 0; i < 8; ++i) macro[i].layout(S(118 + i * 110), S(828), S(96), S(68), S(12));
-    keyboard.setBounds(S(22), S(910), S(996), S(60));
+    for (int i = 0; i < 8; ++i) macro[i].layout(S(118 + i * 110), S(908), S(96), S(68), S(12));
+    keyboard.setBounds(S(22), S(990), S(996), S(60));
 }
