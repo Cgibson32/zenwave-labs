@@ -81,6 +81,13 @@ namespace Presets
         setParam(apvts, ParamIDs::carveOn, 1.0f);
         for (int i = 0; i < nebula::kCarveBands; ++i) setParam(apvts, ParamIDs::carveBandOn(i), 0.0f);
         setParam(apvts, ParamIDs::duck, 0.0f); setParam(apvts, ParamIDs::duckRelease, 250.0f);
+        // FX page defaults
+        const float eqDef[4] = { 120.0f, 500.0f, 2500.0f, 9000.0f }; const int eqTypeDef[4] = { 1, 0, 0, 2 };
+        for (int i = 0; i < 4; ++i) { setParam(apvts, ParamIDs::eqOn(i), 0.0f); setParam(apvts, ParamIDs::eqType(i), float(eqTypeDef[i])); setParam(apvts, ParamIDs::eqFreq(i), eqDef[i]); setParam(apvts, ParamIDs::eqGain(i), 0.0f); setParam(apvts, ParamIDs::eqQ(i), 1.0f); }
+        setParam(apvts, ParamIDs::satOn, 0.0f); setParam(apvts, ParamIDs::satDrive, 0.3f); setParam(apvts, ParamIDs::satMix, 1.0f);
+        setParam(apvts, ParamIDs::glueOn, 0.0f); setParam(apvts, ParamIDs::glueDepth, 0.5f); setParam(apvts, ParamIDs::glueTime, 0.5f);
+        setParam(apvts, ParamIDs::echoOn, 0.0f); setParam(apvts, ParamIDs::echoSync, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoTime, 375.0f);
+        setParam(apvts, ParamIDs::echoFb, 0.4f); setParam(apvts, ParamIDs::echoMix, 0.25f); setParam(apvts, ParamIDs::echoTone, 0.5f); setParam(apvts, ParamIDs::echoPP, 1.0f);
         setParam(apvts, ParamIDs::power, 1.0f);
 
         // carve + motion per preset (targets 1-based: PosA=1 PosB Cutoff Res Drive LevelA LevelB Space Warmth Air Movement Grit Width Drift Duck=15)
@@ -94,7 +101,11 @@ namespace Presets
         if (n == "Alien Keys")        { band(0, 2.0f, 0.3f, 0.0f); band(1, 7.0f, 0.4f, 3.0f); band(2, 11.0f, 0.3f, 2.5f); }
         if (n == "Siren Call")        { band(0, 3.0f, 0.5f, 2.5f); band(1, 5.0f, 0.4f, 0.3f); zwui::setLfo(apvts, 0, 0, false, 8, 5.5f); zwui::setModSlot(apvts, 0, 1, 1, 0.08f); }
         if (n == "Ion Growl")         { band(0, 3.0f, 0.4f, 3.0f); band(1, 8.0f, 0.6f, 0.2f); zwui::setLfo(apvts, 0, 7, true, 10, 1.0f); zwui::setModSlot(apvts, 0, 1, 3, 0.40f); zwui::setModSlot(apvts, 1, 1, 1, 0.30f); }
-        if (n == "Dune Lead")         { zwui::setEnv(apvts, 2.0f, 200.0f, 0.3f, 200.0f); }
+        if (n == "Dune Lead")         { zwui::setEnv(apvts, 2.0f, 200.0f, 0.3f, 200.0f); setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.35f); setParam(apvts, ParamIDs::echoMix, 0.2f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.35f); }
+        if (n == "Glass Keys")        { setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 4.0f); setParam(apvts, ParamIDs::echoFb, 0.3f); setParam(apvts, ParamIDs::echoMix, 0.18f); setParam(apvts, ParamIDs::eqOn(0), 1.0f); setParam(apvts, ParamIDs::eqGain(0), -3.0f); }
+        if (n == "Event Horizon Pad") { setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.4f); setParam(apvts, ParamIDs::glueTime, 0.7f); setParam(apvts, ParamIDs::eqOn(0), 1.0f); setParam(apvts, ParamIDs::eqGain(0), -4.0f); setParam(apvts, ParamIDs::eqOn(3), 1.0f); setParam(apvts, ParamIDs::eqGain(3), 2.0f); }
+        if (n == "Ion Growl")         { setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.55f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.6f); setParam(apvts, ParamIDs::glueTime, 0.3f); setParam(apvts, ParamIDs::eqOn(1), 1.0f); setParam(apvts, ParamIDs::eqFreq(1), 350.0f); setParam(apvts, ParamIDs::eqGain(1), -3.0f); }
+        if (n == "Halo Pluck")        { setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.45f); setParam(apvts, ParamIDs::echoMix, 0.3f); setParam(apvts, ParamIDs::echoTone, 0.4f); }
         if (n == "Halo Pluck")        { band(0, 2.0f, 0.3f, 1.8f); band(1, 4.0f, 0.3f, 1.5f); }
     }
 }

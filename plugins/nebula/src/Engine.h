@@ -8,10 +8,12 @@
 
 #include <JuceHeader.h>
 #include <zenwave/zenwave.h>
+#include <zenwave/PulseEngine.h>   // OttBand for GLUE
 #include <array>
 #include <atomic>
 #include <memory>
 #include <cmath>
+#include <complex>
 
 namespace nebula {
 
@@ -295,6 +297,107 @@ private:
     Adsr amp, mod; zw::SVF filt[2];
     float ph[2][8] {}, driftState[2][8] {}, driftTarget[2][8] {}; float driftK = 0.001f, posK = 0.003f, posSm[2] = { -1.0f, -1.0f };
     juce::Random rng;
+};
+
+
+// ---------------- internal FX chain: EQ -> SATURATE -> GLUE -> ECHO (SPACE follows in the processor) --------
+struct EqNode { bool on = false; int type = 0; float freq = 1000.0f, gainDb = 0.0f, q = 1.0f; };   // type: 0 bell 1 low shelf 2 high shelf 3 low cut 4 high cut
+
+class Biquad
+{
+public:
+    void reset() { for (auto& c : ch) c = {}; }
+    void set(const EqNode& n, double fs)
+    {
+        const float A = std::pow(10.0f, n.gainDb / 40.0f), w0 = 2.0f * 3.14159265f * zw::clampf(n.freq, 10.0f, float(fs * 0.45)) / float(fs);
+        const float cw = std::cos(w0), sw = std::sin(w0), alpha = sw / (2.0f * zw::clampf(n.q, 0.1f, 18.0f));
+        float b0, b1, b2, a0, a1, a2;
+        switch (n.type)
+        {
+            case 1: { const float s2 = 2.0f * std::sqrt(A) * alpha; b0 = A * ((A + 1) - (A - 1) * cw + s2); b1 = 2 * A * ((A - 1) - (A + 1) * cw); b2 = A * ((A + 1) - (A - 1) * cw - s2); a0 = (A + 1) + (A - 1) * cw + s2; a1 = -2 * ((A - 1) + (A + 1) * cw); a2 = (A + 1) + (A - 1) * cw - s2; } break;
+            case 2: { const float s2 = 2.0f * std::sqrt(A) * alpha; b0 = A * ((A + 1) + (A - 1) * cw + s2); b1 = -2 * A * ((A - 1) + (A + 1) * cw); b2 = A * ((A + 1) + (A - 1) * cw - s2); a0 = (A + 1) - (A - 1) * cw + s2; a1 = 2 * ((A - 1) - (A + 1) * cw); a2 = (A + 1) - (A - 1) * cw - s2; } break;
+            case 3: b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = (1 + cw) / 2; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; break;
+            case 4: b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = (1 - cw) / 2; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; break;
+            default: b0 = 1 + alpha * A; b1 = -2 * cw; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cw; a2 = 1 - alpha / A; break;
+        }
+        c0 = b0 / a0; c1 = b1 / a0; c2 = b2 / a0; d1 = a1 / a0; d2 = a2 / a0;
+    }
+    float process(int c, float x) { auto& s = ch[c]; const float y = c0 * x + c1 * s.x1 + c2 * s.x2 - d1 * s.y1 - d2 * s.y2; s.x2 = s.x1; s.x1 = x; s.y2 = s.y1; s.y1 = y; return y; }
+    // magnitude response in dB (for drawing)
+    float magDb(float hz, double fs) const
+    {
+        const float w = 2.0f * 3.14159265f * hz / float(fs);
+        const std::complex<float> z1(std::cos(-w), std::sin(-w)), z2 = z1 * z1;
+        const auto num = c0 + c1 * z1 + c2 * z2, den = 1.0f + d1 * z1 + d2 * z2;
+        return 20.0f * std::log10(std::abs(num / den) + 1e-9f);
+    }
+private:
+    struct S { float x1 = 0, x2 = 0, y1 = 0, y2 = 0; } ch[2];
+    float c0 = 1, c1 = 0, c2 = 0, d1 = 0, d2 = 0;
+};
+
+struct FxParams
+{
+    EqNode eq[4];
+    bool satOn = false; float satDrive = 0.3f, satMix = 1.0f;
+    bool glueOn = false; float glueDepth = 0.5f, glueTime = 0.5f;
+    bool echoOn = false; float echoTimeMs = 375.0f; float echoFeedback = 0.4f, echoMix = 0.25f, echoTone = 0.5f; bool echoPingPong = true;
+};
+
+class FxChain
+{
+public:
+    void prepare(double sr)
+    {
+        fs = sr;
+        for (auto& b : eq) b.reset();
+        glue.prepare(sr, 6.0f, 90.0f);
+        for (int c = 0; c < 2; ++c) { dl[c].prepare(sr, 2.5f); tone[c].setSampleRate(sr); tone[c].setLowpass(8000.0f); hp[c].setSampleRate(sr); hp[c].setHighpass(120.0f); satDC[c].setSampleRate(sr); satDC[c].setHighpass(10.0f); }
+        for (auto* s : { &smSatMix, &smGlueMix, &smEchoMix, &smEchoFb, &smEchoTime, &smSatDrive }) { s->setSampleRate(sr); s->setTime(30.0f); }
+        smEchoTime.setTime(80.0f);
+        set(params); smEchoTime.reset(float(params.echoTimeMs * 0.001 * sr)); smEchoMix.reset(0.0f); smSatMix.reset(0.0f); smGlueMix.reset(0.0f);
+    }
+    void set(const FxParams& p)
+    {
+        params = p;
+        for (int i = 0; i < 4; ++i) { eqOn[i] = p.eq[i].on; if (p.eq[i].on) eq[i].set(p.eq[i], fs); }
+        smSatMix.setTarget(p.satOn ? p.satMix : 0.0f); smSatDrive.setTarget(p.satDrive);
+        smGlueMix.setTarget(p.glueOn ? 1.0f : 0.0f); glue.set(p.glueDepth, p.glueTime, 1.0f, 1.0f, true);
+        smEchoMix.setTarget(p.echoOn ? p.echoMix : 0.0f); smEchoFb.setTarget(zw::clampf(p.echoFeedback, 0.0f, 0.95f));
+        smEchoTime.setTarget(float(zw::clampf(p.echoTimeMs, 10.0f, 2400.0f) * 0.001 * fs));
+        for (auto& t : tone) t.setLowpass(zw::lerp(1500.0f, 14000.0f, p.echoTone));
+    }
+    void process(float* L, float* R, int n)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            float l = L[i], r = R[i];
+            // EQ
+            for (int k = 0; k < 4; ++k) if (eqOn[k]) { l = eq[k].process(0, l); r = eq[k].process(1, r); }
+            // Saturate
+            { const float m = smSatMix.next(), d = smSatDrive.next(); if (m > 0.0005f) { const float g = 1.0f + d * d * 12.0f; const float sl = satDC[0].process(zw::fastTanh(l * g) / std::sqrt(g)), sr_ = satDC[1].process(zw::fastTanh(r * g) / std::sqrt(g)); l = zw::lerp(l, sl, m); r = zw::lerp(r, sr_, m); } }
+            // Glue (single-band OTT, adaptive)
+            { const float m = smGlueMix.next(); const float g = glue.process(l, r); if (m > 0.0005f) { const float gg = zw::lerp(1.0f, g, m); l *= gg; r *= gg; } glueGrVis = glue.gainReductionDb(); }
+            // Echo (ping-pong, filtered feedback)
+            {
+                const float m = smEchoMix.next(), fb = smEchoFb.next(), tSamp = smEchoTime.next();
+                const float dL = dl[0].read(tSamp), dR = dl[1].read(tSamp);
+                const float inL = hp[0].process(l), inR = hp[1].process(r);
+                const float fbL = tone[0].process(params.echoPingPong ? dR : dL) * fb, fbR = tone[1].process(params.echoPingPong ? dL : dR) * fb;
+                dl[0].write(zw::fastTanh(inL + fbL)); dl[1].write(zw::fastTanh(inR + fbR));
+                l += dL * m; r += dR * m;
+            }
+            L[i] = l; R[i] = r;
+        }
+    }
+    float eqResponseDb(float hz) const { float db = 0.0f; for (int k = 0; k < 4; ++k) if (eqOn[k]) db += eq[k].magDb(hz, fs); return db; }
+    float glueGrVis = 0.0f;
+private:
+    double fs = 48000.0; FxParams params;
+    Biquad eq[4]; bool eqOn[4] = { false, false, false, false };
+    zw::OttBand glue;
+    zw::DelayLine dl[2]; zw::OnePole tone[2], hp[2], satDC[2];
+    zw::Smoother smSatMix, smSatDrive, smGlueMix, smEchoMix, smEchoFb, smEchoTime;
 };
 
 } // namespace nebula

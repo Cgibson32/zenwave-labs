@@ -57,6 +57,13 @@ namespace NebulaManual
               { "RELEASE", "Scales the amp release 0.1x - 10x.", "mrelease" },
               { "Mod wheel / aftertouch", "Both push the filter open and act as pressure - expressive without any setup." } } });
 
+        v.push_back({ "FX PAGE", "The VOICE / FX tabs switch the middle band. FX is the patch's own processing chain, in order: EQ -> SATURATE -> GLUE -> ECHO -> SPACE.",
+            { { "EQ", "Four nodes on the synth's live output spectrum. Click the display to place a node, drag to move it (frequency / gain), or use the NODE buttons and FREQ / GAIN / Q knobs. Types: bell, low shelf, high shelf, low cut, high cut. Node gains are modulation targets - a slow LFO on a high shelf is a breathing pad.", "eq1freq" },
+              { "GAIN", "Selected node gain.", "eq1gain" }, { "Q", "Selected node width.", "eq1q" },
+              { "SATURATE", "Core-style tape stage over the whole patch. DRIVE = how hard, MIX = parallel blend.", "satdrive" }, { "MIX", "Saturation blend.", "satmix" },
+              { "GLUE", "A single-band Pulse compressor: upward and downward, adaptive thresholds. DEPTH is the amount, TIME scales attack and release. Pads stay even, plucks get dense. GR shows the live gain change.", "gluedepth" }, { "TIME", "Glue timing scale.", "gluetime" },
+              { "ECHO", "Synced ping-pong delay with a filtered, gently saturating feedback loop. SYNC + division or TIME in ms; FEEDBACK, MIX, TONE (dark to bright repeats).", "echofb" },
+              { "TIME", "Echo time when SYNC is off.", "echotime" }, { "MIX", "Echo level.", "echomix" }, { "TONE", "Feedback filter: left = dark dub repeats, right = bright.", "echotone" } } });
         v.push_back(zwui::motionSection());
         v.push_back(zwui::presetSection());
         v.push_back({ "RECIPES", "",

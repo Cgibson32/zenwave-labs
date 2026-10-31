@@ -737,8 +737,14 @@ private:
 
 // The "field": a real-time audio spectrum (wet in colour, dry input as a ghost line, peak-hold
 // trace) with the EQ response drawn over it and cutoff handles.
+// dB <-> y mapping of the EQ overlay inside drawEqField (±24 dB around a line at 32 % height)
+inline float eqFieldYForDb(juce::Rectangle<float> r, float db) { const float top = r.getY() + 6.0f, H = r.getBottom() - 1.0f - top; return top + H * 0.32f - db / 24.0f * H * 0.30f; }
+inline float eqFieldDbForY(juce::Rectangle<float> r, float y) { const float top = r.getY() + 6.0f, H = r.getBottom() - 1.0f - top; return (top + H * 0.32f - y) / (H * 0.30f) * 24.0f; }
+
+// customDb: when given, replaces the cut/tilt curve (and hides the cutoff handles) - used by synths with a node EQ
 inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const SpectrumAnalyser& wet, const SpectrumAnalyser* dry,
-                        const EqCurve& eq, juce::Colour accent, juce::Colour accent2, float pulse)
+                        const EqCurve& eq, juce::Colour accent, juce::Colour accent2, float pulse,
+                        const std::function<float(float)>& customDb = nullptr, const char* legend = "WET")
 {
     auto xFor = [&](float hz) { return r.getX() + r.getWidth() * std::log(hz / 20.0f) / std::log(1000.0f); };
     const float top = r.getY() + 6.0f, bottom = r.getBottom() - 1.0f, H = bottom - top;
@@ -806,7 +812,7 @@ inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const Spect
         const float hpMag = 1.0f / std::sqrt(1.0f + std::pow(eq.lowCutHz / hz, 2.0f * nLow));
         const float lpMag = 1.0f / std::sqrt(1.0f + std::pow(hz / eq.highCutHz, 2.0f * nHigh));
         const float tiltDb = eq.tilt * 6.0f * std::tanh(std::log(hz / 1000.0f) * 0.9f);
-        const float db = juce::Decibels::gainToDecibels(hpMag * lpMag + 1e-6f) + tiltDb;
+        const float db = customDb ? customDb(hz) : juce::Decibels::gainToDecibels(hpMag * lpMag + 1e-6f) + tiltDb;
         const float x = xFor(hz), y = juce::jlimit(top, bottom, yForDb(db));
         if (first) { curve.startNewSubPath(x, y); first = false; } else curve.lineTo(x, y);
     }
@@ -818,7 +824,7 @@ inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const Spect
     glowStroke(g, curve, juce::Colours::white.interpolatedWith(accent, 0.2f), 1.8f, 0.9f + pulse * 0.5f);
 
     // cutoff handles
-    for (float hz : { eq.lowCutHz, eq.highCutHz })
+    if (! customDb) for (float hz : { eq.lowCutHz, eq.highCutHz })
     {
         const float x = xFor(juce::jlimit(20.0f, 20000.0f, hz));
         g.setColour(accent.withAlpha(0.5f));
@@ -829,7 +835,7 @@ inline void drawEqField(juce::Graphics& g, juce::Rectangle<float> r, const Spect
     }
     // legend
     g.setFont(juce::Font(juce::FontOptions(8.0f, juce::Font::bold)));
-    g.setColour(accent2); g.drawText("WET", int(r.getX()) + 8, int(top) + 2, 30, 10, juce::Justification::left);
+    g.setColour(accent2); g.drawText(legend, int(r.getX()) + 8, int(top) + 2, 30, 10, juce::Justification::left);
     if (dry) { g.setColour(juce::Colours::white.withAlpha(0.45f)); g.drawText("IN", int(r.getX()) + 34, int(top) + 2, 20, 10, juce::Justification::left); }
     g.setColour(accent.withAlpha(0.5f));
     g.drawRoundedRectangle(r, 10.0f, 1.0f);

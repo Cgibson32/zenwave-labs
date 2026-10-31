@@ -34,6 +34,24 @@ private:
     zwui::Knob ampK[4], modK[4];
     zwui::Knob spaceSize, spaceDecay, spaceDark, duck, duckRel, glide, drift, volume;
     zwui::Knob macro[8];
+    // ---- FX page ----
+    int page = 0;                                   // 0 = VOICE, 1 = FX
+    juce::TextButton voiceTab { "VOICE" }, fxTab { "FX" };
+    void setPage(int p);
+    int selectedEq = 1;
+    juce::TextButton eqSel[4];
+    juce::ToggleButton eqOnButton; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> eqOnAttach;
+    juce::ComboBox eqTypeBox; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> eqTypeAttach;
+    zwui::Knob eqFreq, eqGain, eqQ;
+    void attachEq(int i);
+    zwui::SpectrumAnalyser fxAnalyser;
+    juce::Rectangle<int> eqDisplay;
+    int eqDrag = -1;
+    void mouseDown(const juce::MouseEvent&) override; void mouseDrag(const juce::MouseEvent&) override; void mouseUp(const juce::MouseEvent&) override;
+    juce::ToggleButton satButton { "SATURATE" }, glueButton { "GLUE" }, echoButton { "ECHO" }, echoSyncButton { "SYNC" }, echoPPButton { "PING-PONG" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> satAttach, glueAttach, echoAttach, echoSyncAttach, echoPPAttach;
+    juce::ComboBox echoDivBox; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> echoDivAttach;
+    zwui::Knob satDrive, satMix, glueDepth, glueTime, echoTime, echoFb, echoMix, echoTone;
     juce::ToggleButton powerButton; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> powerAttach;
     zwui::ModPanel modPanel { processor.apvts, processor.mod, lnf };
     zwui::PresetBar presetBar;

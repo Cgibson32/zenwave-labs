@@ -71,6 +71,8 @@ Three-band saturator for bass music. LR4 crossovers (drag the lines in the spect
 
 Three-band upward/downward compressor (the OTT idea) with adaptive thresholds (AUTO), 3 ms lookahead, program-dependent release, transient shaper (ATTACK / SUSTAIN), pattern duck (Steps LFO -> DUCK) and external sidechain, GRIT, and a four-node dynamic EQ drawn on the spectrum. MATCH places the splits and trims output so out = in. 19 presets, same shell as the rest of the line.
 
-## NEBULA - planetary wavetable synth (v0.8)
+## NEBULA - planetary wavetable synth (v0.9)
 
 Two oscillators on eight procedurally generated, band-limited wavetables (Glass, Voice, Metal, Grain, Dune, Halo, Ion, Void), 32 frames each. The planet centrepiece draws oscillator A as a sphere of rings, B as its orbit, playing voices as moons and the harmonic spectrum as a halo. CARVE: up to 8 hand-placed harmonic bands (centre, width, gain) rendered into the wavetable. Per-voice SVF filter + drive, two ADSRs, unison with mono-safe spread and drift, Umbra's reverb as SPACE, sidechain DUCK so pads sit behind the track, eight macros, Motion matrix, on-screen keyboard, 14 presets.
+
+**FX page** (VOICE / FX tabs over the middle band): the patch's own processing chain, in order EQ -> SATURATE -> GLUE -> ECHO -> SPACE. EQ: four nodes (bell / shelves / cuts) placed by clicking on a live spectrum of the synth's output; node gains are modulation targets. SATURATE is a Core-style tape stage, GLUE a single-band Pulse compressor (upward + downward, adaptive) with a live GR readout, ECHO a tempo-synced ping-pong delay with a filtered, saturating feedback loop. Every module has an on/off, every knob is modulatable, everything saves with the preset.

@@ -27,19 +27,31 @@ namespace ParamIDs
     inline constexpr auto modA = "moda", modD = "modd", modS = "mods", modR = "modr";
     inline constexpr auto spaceMix = "spacemix", spaceSize = "spacesize", spaceDecay = "spacedecay", spaceDark = "spacedark";
     inline constexpr auto mWarmth = "mwarmth", mAir = "mair", mMovement = "mmovement", mSpace = "mspace", mGrit = "mgrit", mWidth = "mwidth", mAttack = "mattack", mRelease = "mrelease";
+    // FX page
+    inline juce::String eqOn(int i) { return "eq" + juce::String(i + 1) + "on"; }
+    inline juce::String eqType(int i) { return "eq" + juce::String(i + 1) + "type"; }
+    inline juce::String eqFreq(int i) { return "eq" + juce::String(i + 1) + "freq"; }
+    inline juce::String eqGain(int i) { return "eq" + juce::String(i + 1) + "gain"; }
+    inline juce::String eqQ(int i) { return "eq" + juce::String(i + 1) + "q"; }
+    inline constexpr auto satOn = "saton", satDrive = "satdrive", satMix = "satmix";
+    inline constexpr auto glueOn = "glueon", glueDepth = "gluedepth", glueTime = "gluetime";
+    inline constexpr auto echoOn = "echoon", echoSync = "echosync", echoDiv = "echodiv", echoTime = "echotime", echoFb = "echofb", echoMix = "echomix", echoTone = "echotone", echoPP = "echopp";
     inline constexpr auto duck = "duck";          // sidechain duck amount
     inline constexpr auto duckRelease = "duckrelease";
     inline constexpr auto volume = "volume";
     inline constexpr auto power  = "power";
 }
 
-namespace ModT { enum { PosA, PosB, Cutoff, Res, Drive, LevelA, LevelB, SpaceMix, Warmth, Air, Movement, Grit, Width, Drift, Duck, Count }; }
+namespace ModT { enum { PosA, PosB, Cutoff, Res, Drive, LevelA, LevelB, SpaceMix, Warmth, Air, Movement, Grit, Width, Drift, Duck,
+                        SatDrive, GlueDepth, EchoFb, EchoMix, EchoTone, Eq1Gain, Eq2Gain, Eq3Gain, Eq4Gain, Count }; }
 inline const std::vector<zwui::ModTarget>& nebulaModTargets()
 {
     static const std::vector<zwui::ModTarget> t {
         { "aposition", "Position A" }, { "bposition", "Position B" }, { ParamIDs::cutoff, "Cutoff" }, { ParamIDs::res, "Resonance" }, { ParamIDs::drive, "Drive" },
         { "alevel", "Level A" }, { "blevel", "Level B" }, { ParamIDs::spaceMix, "Space" }, { ParamIDs::mWarmth, "Warmth" }, { ParamIDs::mAir, "Air" },
-        { ParamIDs::mMovement, "Movement" }, { ParamIDs::mGrit, "Grit" }, { ParamIDs::mWidth, "Width" }, { ParamIDs::drift, "Drift" }, { ParamIDs::duck, "Duck" } };
+        { ParamIDs::mMovement, "Movement" }, { ParamIDs::mGrit, "Grit" }, { ParamIDs::mWidth, "Width" }, { ParamIDs::drift, "Drift" }, { ParamIDs::duck, "Duck" },
+        { ParamIDs::satDrive, "Sat Drive" }, { ParamIDs::glueDepth, "Glue Depth" }, { ParamIDs::echoFb, "Echo Feedback" }, { ParamIDs::echoMix, "Echo Mix" }, { ParamIDs::echoTone, "Echo Tone" },
+        { "eq1gain", "EQ 1 Gain" }, { "eq2gain", "EQ 2 Gain" }, { "eq3gain", "EQ 3 Gain" }, { "eq4gain", "EQ 4 Gain" } };
     return t;
 }
 
@@ -104,6 +116,7 @@ private:
     nebula::VoiceParams vp;
     nebula::Voice voices[kVoices];
     zw::SpaceReverb reverb;
+    nebula::FxChain fx; nebula::FxParams fxp;
     zw::Smoother smSpaceMix, smVolume;
     zw::Smoother smPower;
     zwui::Meter meterOut;
@@ -120,6 +133,12 @@ private:
     std::atomic<float>* pAmp[4]{}, * pModEnv[4]{};
     std::atomic<float>* pSpaceMix{}, * pSpaceSize{}, * pSpaceDecay{}, * pSpaceDark{};
     std::atomic<float>* pMacro[8]{}; std::atomic<float>* pVolume{}, * pPower{}, * pDuck{}, * pDuckRelease{};
+    std::atomic<float>* pEqOn[4]{}, * pEqType[4]{}, * pEqFreq[4]{}, * pEqQ[4]{};
+    std::atomic<float>* pSatOn{}, * pSatMix{}, * pGlueOn{}, * pGlueTime{}, * pEchoOn{}, * pEchoSync{}, * pEchoDiv{}, * pEchoTime{}, * pEchoPP{};
+public:
+    float eqResponseDb(float hz) const { return fx.eqResponseDb(hz); }
+    float glueGr() const { return fx.glueGrVis; }
+private:
     float scEnv = 0.0f; zw::OnePole scLP[2];
 public:
     std::atomic<bool> sidechainPresent { false };
