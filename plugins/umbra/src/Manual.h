@@ -32,7 +32,7 @@ namespace UmbraManual
               { "MOTION RATE", "Speed multiplier for that modulation (0.1-4x). Low = slow swirl, high = shimmer.", "motionrate" },
               { "GRAVITY", "Crossover from 40 to 300 Hz. Everything below it bypasses the reverb and stays dry and mono - this is what keeps drops clean. Raise it until the sub is untouched.", "gravity" },
               { "EARLY", "Level of early reflections - the first few bounces. More = a sense of walls and placement; less = pure tail.", "early" },
-              { "DUCK", "Sidechains the wet signal to the dry input. While the source plays the tail drops back; when it stops, the space swells up behind it. Great on vocals and leads.", "duck" },
+              { "DUCK", "Sidechains the wet signal to the dry input. While the source plays the tail drops back; when it stops, the space swells up behind it. Great on vocals and leads. Set the Motion envelope source to SC and DUCK (and BLOOM) follow the sidechain input instead - a kick on another track ducking the reverb bus.", "duck" },
               { "WIDTH", "Stereo width of the wet signal. 100 % = natural, up to 150 % = extra wide, 0 = mono.", "width" },
               { "OUTPUT", "Output trim, -24 to +12 dB.", "output" } } });
 

@@ -13,7 +13,8 @@ static const char* kIds[23] = {
 UmbraAudioProcessor::UmbraAudioProcessor()
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+                         .withInput("Sidechain", juce::AudioChannelSet::stereo(), false)),
       apvts(*this, nullptr, "PARAMS", createLayout())
 {
     for (int i = 0; i < 23; ++i) p[i] = apvts.getRawParameterValue(kIds[i]);
@@ -103,7 +104,9 @@ bool UmbraAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) con
     const auto& out = layouts.getMainOutputChannelSet();
     const auto& in  = layouts.getMainInputChannelSet();
     if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo()) return false;
-    return in == out || (in == juce::AudioChannelSet::mono() && out == juce::AudioChannelSet::stereo());
+    if (! (in == out || (in == juce::AudioChannelSet::mono() && out == juce::AudioChannelSet::stereo()))) return false;
+    const auto& sc = layouts.getChannelSet(true, 1);
+    return sc.isDisabled() || sc == juce::AudioChannelSet::mono() || sc == juce::AudioChannelSet::stereo();
 }
 
 void UmbraAudioProcessor::updateEngineParams()
@@ -133,12 +136,18 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
     hostBpm = zwui::readTransport(*this, motion, hostBpm);
+    const float* scL = nullptr; const float* scR = nullptr;
+    if (getBusCount(true) > 1 && getBus(true, 1)->isEnabled())
+    {
+        auto sc = getBusBuffer(buffer, true, 1);
+        if (sc.getNumChannels() > 0) { scL = sc.getReadPointer(0); scR = sc.getNumChannels() > 1 ? sc.getReadPointer(1) : scL; }
+    }
     meterIn.push(buffer, motion.levelIn);
     spectrumIn.push(buffer);
     const int n = buffer.getNumSamples();
-    const int numIn = getTotalNumInputChannels(), numOut = getTotalNumOutputChannels();
+    const int numIn = getMainBusNumInputChannels(), numOut = getTotalNumOutputChannels();
     power.begin(buffer, p[13]->load() > 0.5f);
-    if (power.skipProcessing()) { mod.process(buffer.getReadPointer(0), numIn > 1 ? buffer.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load()); updateEngineParams(); motion.levelOut.store(0.0f); return; }
+    if (power.skipProcessing()) { mod.process(buffer.getReadPointer(0), numIn > 1 ? buffer.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load(), scL, scR); updateEngineParams(); motion.levelOut.store(0.0f); return; }
     if (numOut >= 2 && numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
 
     constexpr int kSub = 64;
@@ -147,7 +156,7 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     for (int start = 0; start < n; start += kSub)
     {
         const int len = juce::jmin(kSub, n - start);
-        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing, scL ? scL + start : nullptr, scR ? scR + start : nullptr);
         pad.process(len, hostBpm);
         {
             const double ppqEnd = playing ? ppq + len / currentSampleRate * hostBpm / 60.0 : ppq;
@@ -156,7 +165,8 @@ void UmbraAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
         }
         updateEngineParams();
         if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));
-        if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len);
+        const bool scDuck = mod.usingSidechain() && scL != nullptr;
+        if (numOut >= 2) engine.process(buffer.getWritePointer(0, start), buffer.getWritePointer(1, start), len, scDuck ? scL + start : nullptr, scDuck ? scR + start : nullptr);
         else if (numOut == 1) engine.processMono(buffer.getWritePointer(0, start), len);
         engine.setWetTap(nullptr, nullptr);
         if (playing) ppq += len / currentSampleRate * hostBpm / 60.0;

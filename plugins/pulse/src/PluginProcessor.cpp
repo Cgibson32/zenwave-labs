@@ -168,7 +168,7 @@ void PulseAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     { double e = 0; for (int c = 0; c < juce::jmin(2, numIn); ++c) { const float* d = main.getReadPointer(c); for (int i = 0; i < n; ++i) e += d[i] * d[i]; } inRms.store(float(std::sqrt(e / juce::jmax(1, n * juce::jmin(2, numIn))))); }
 
     power.begin(buffer, pPower->load() > 0.5f);
-    if (power.skipProcessing()) { mod.process(main.getReadPointer(0), numIn > 1 ? main.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load()); updateEngineParams(); motion.levelOut.store(0.0f); return; }
+    if (power.skipProcessing()) { mod.process(main.getReadPointer(0), numIn > 1 ? main.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load(), scL, scR); updateEngineParams(); motion.levelOut.store(0.0f); return; }
     if (numOut >= 2 && numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
 
     constexpr int kSub = 64;
@@ -177,7 +177,7 @@ void PulseAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::M
     for (int start = 0; start < n; start += kSub)
     {
         const int len = juce::jmin(kSub, n - start);
-        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing, scL ? scL + start : nullptr, scR ? scR + start : nullptr);
         pad.process(len, hostBpm);
         updateEngineParams();
         if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));

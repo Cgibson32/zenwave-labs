@@ -106,7 +106,10 @@ public:
         const bool  hot   = s.isMouseOverOrDragging();
         const bool  bipolar = s.getMinimum() < 0.0 && s.getMaximum() > 0.0;
         const float from = bipolar ? (startAngle + endAngle) * 0.5f : startAngle;
-        const float amount = bipolar ? std::abs(pos - 0.5f) * 2.0f : pos;
+        // Glow follows the modulated value when the knob is a live modulation target, so it pulses with the motion
+        const float modPosEarly = float(s.getProperties().getWithDefault("modPos", -1.0f));
+        const float glowPos = modPosEarly >= 0.0f ? modPosEarly : pos;
+        const float amount = bipolar ? std::abs(glowPos - 0.5f) * 2.0f : glowPos;
         const float breathe = 1.0f + pulse * 0.35f * amount;
         const float glow = (0.25f + amount * 1.3f + (hot ? 0.5f : 0.0f)) * breathe;
         const auto col = aurora(amount, accent, accent2);

@@ -6,7 +6,8 @@ using APVTS = juce::AudioProcessorValueTreeState;
 CoreAudioProcessor::CoreAudioProcessor()
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+                         .withInput("Sidechain", juce::AudioChannelSet::stereo(), false)),
       apvts(*this, nullptr, "PARAMS", createLayout())
 {
     pOutput = apvts.getRawParameterValue(ParamIDs::output);
@@ -117,7 +118,9 @@ bool CoreAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) cons
     const auto& out = layouts.getMainOutputChannelSet();
     const auto& in  = layouts.getMainInputChannelSet();
     if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo()) return false;
-    return in == out || (in == juce::AudioChannelSet::mono() && out == juce::AudioChannelSet::stereo());
+    if (! (in == out || (in == juce::AudioChannelSet::mono() && out == juce::AudioChannelSet::stereo()))) return false;
+    const auto& sc = layouts.getChannelSet(true, 1);
+    return sc.isDisabled() || sc == juce::AudioChannelSet::mono() || sc == juce::AudioChannelSet::stereo();
 }
 
 void CoreAudioProcessor::updateEngineParams()
@@ -155,12 +158,18 @@ void CoreAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
 {
     juce::ScopedNoDenormals noDenormals;
     hostBpm = zwui::readTransport(*this, motion, hostBpm);
+    const float* scL = nullptr; const float* scR = nullptr;
+    if (getBusCount(true) > 1 && getBus(true, 1)->isEnabled())
+    {
+        auto sc = getBusBuffer(buffer, true, 1);
+        if (sc.getNumChannels() > 0) { scL = sc.getReadPointer(0); scR = sc.getNumChannels() > 1 ? sc.getReadPointer(1) : scL; }
+    }
     meterIn.push(buffer, motion.levelIn);
     spectrumIn.push(buffer);
     const int n = buffer.getNumSamples();
-    const int numIn = getTotalNumInputChannels(), numOut = getTotalNumOutputChannels();
+    const int numIn = getMainBusNumInputChannels(), numOut = getTotalNumOutputChannels();
     power.begin(buffer, pPower->load() > 0.5f);
-    if (power.skipProcessing()) { mod.process(buffer.getReadPointer(0), numIn > 1 ? buffer.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load()); updateEngineParams(); motion.levelOut.store(0.0f); return; }
+    if (power.skipProcessing()) { mod.process(buffer.getReadPointer(0), numIn > 1 ? buffer.getReadPointer(1) : nullptr, n, hostBpm, motion.ppq.load(), motion.playing.load(), scL, scR); updateEngineParams(); motion.levelOut.store(0.0f); return; }
     if (numOut >= 2 && numIn == 1) buffer.copyFrom(1, 0, buffer, 0, 0, n);
 
     constexpr int kSub = 64;
@@ -169,7 +178,7 @@ void CoreAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mi
     for (int start = 0; start < n; start += kSub)
     {
         const int len = juce::jmin(kSub, n - start);
-        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing);
+        mod.process(buffer.getReadPointer(0, start), numOut >= 2 ? buffer.getReadPointer(1, start) : nullptr, len, hostBpm, ppq, playing, scL ? scL + start : nullptr, scR ? scR + start : nullptr);
         pad.process(len, hostBpm);
         updateEngineParams();
         if (wetScratch.getNumSamples() >= n) engine.setWetTap(wetScratch.getWritePointer(0, start), wetScratch.getWritePointer(1, start));

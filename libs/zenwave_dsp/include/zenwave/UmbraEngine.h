@@ -121,7 +121,8 @@ public:
         }
     }
 
-    void process(float* L, float* R, int n) noexcept
+    // scL/scR (optional): external sidechain that drives DUCK and BLOOM instead of the dry input
+    void process(float* L, float* R, int n, const float* scL = nullptr, const float* scR = nullptr) noexcept
     {
         for (int i = 0; i < n; ++i)
         {
@@ -169,7 +170,7 @@ public:
             wetL = darken(0, wetL); wetR = darken(1, wetR);
 
             // Duck wet by dry level; Bloom pushes decay up with the same envelope
-            const float level = std::max(std::fabs(dryL), std::fabs(dryR));
+            const float level = scL ? std::max(std::fabs(scL[i]), std::fabs(scR ? scR[i] : scL[i])) : std::max(std::fabs(dryL), std::fabs(dryR));
             duckEnv += (level - duckEnv) * (level > duckEnv ? duckAttack : duckRelease);
             if (params.bloom > 0.001f && (++bloomCounter & 63) == 0)
                 reverb.setDecay(std::min(1.0f, baseDecay + params.bloom * 0.6f * std::min(1.0f, duckEnv * 2.5f)));

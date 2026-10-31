@@ -30,6 +30,9 @@ public:
             L.divAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, ModIDs::lfoDiv(i), L.div);
             L.rate.init(*this, apvts, ModIDs::lfoRate(i).toRawUTF8(), "RATE", false, false);
         }
+        addAndMakeVisible(envSrc);
+        envSrc.setTooltip("SC: the envelope listens to the sidechain input instead of this plugin's own input. Route a kick or any other channel to the sidechain in your DAW and it can drive any knob here (and Umbra's DUCK).");
+        envSrcAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, ModIDs::envSource, envSrc);
         attack.init(*this, apvts, ModIDs::envAttack, "ATK", false, false);
         decay.init(*this, apvts, ModIDs::envDecay, "DEC", false, false);
         sustain.init(*this, apvts, ModIDs::envSustain, "SUS", false, false);
@@ -100,7 +103,8 @@ public:
         const int ex = S(438);
         Knob* envK[4] = { &attack, &decay, &sustain, &release };
         for (int k = 0; k < 4; ++k) envK[k]->layout(ex + S(k * 47), S(82), S(46), S(60), S(11));
-        envMeter = juce::Rectangle<float>(float(ex), S(38.0f), S(188.0f), S(16.0f));
+        envMeter = juce::Rectangle<float>(float(ex), S(38.0f), S(142.0f), S(16.0f));
+        envSrc.setBounds(ex + S(148), S(35), S(40), S(22));
         for (int i = 0; i < ModIDs::kSlots; ++i)
         {
             auto& Sl = slot[i]; const int y = S(32 + i * 31);
@@ -139,6 +143,7 @@ public:
             drawLfoScope(g, L.scope, i, s);
         }
         g.setColour(lnf.accentHi); g.drawText("ENVELOPE  (ADSR)", envMeter.withY(18.0f * s).withHeight(14.0f * s), juce::Justification::centredLeft);
+        if (mod.usingSidechain()) { g.setColour(mod.scPresent.load() ? lnf.accent2 : Palette::magenta); g.setFont(juce::Font(juce::FontOptions(7.5f * s, juce::Font::bold))); g.drawText(mod.scPresent.load() ? "SC CONNECTED" : "NO SC INPUT", juce::Rectangle<float>(envMeter.getX() + 92.0f * s, 18.0f * s, 100.0f * s, 14.0f * s), juce::Justification::centredLeft); }
         drawEnvMeter(g, envMeter, s);
         g.setColour(lnf.accentHi); g.drawText("ROUTING", juce::Rectangle<float>(634.0f * s, 18.0f * s, 150.0f * s, 14.0f * s), juce::Justification::centredLeft);
         // slot connector lines: src → dst → amount, lit when active
@@ -242,6 +247,7 @@ private:
     struct SlotUI { juce::ComboBox src, dst; Knob amt; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> srcAttach, dstAttach; };
     LfoUI lfo[2]; SlotUI slot[ModIDs::kSlots];
     Knob attack, decay, sustain, release;
+    juce::ToggleButton envSrc { "SC" }; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> envSrcAttach;
     juce::Rectangle<float> envMeter;
     ModMatrix& mod; LookAndFeel& lnf; juce::AudioProcessorValueTreeState& state;
     int editing = -1; float sc = 1.0f;

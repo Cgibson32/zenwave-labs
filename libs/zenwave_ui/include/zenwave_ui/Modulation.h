@@ -23,6 +23,7 @@ struct ModIDs
     static constexpr auto envDecay   = "envdecay";
     static constexpr auto envSustain = "envsustain";
     static constexpr auto envRelease = "envrelease";
+    static constexpr auto envSource  = "envsource";   // 0 = this plugin's input, 1 = sidechain input
     static juce::String slotSrc(int i) { return "mod" + juce::String(i + 1) + "src"; }
     static juce::String slotDst(int i) { return "mod" + juce::String(i + 1) + "dst"; }
     static juce::String slotAmt(int i) { return "mod" + juce::String(i + 1) + "amt"; }
@@ -54,6 +55,7 @@ inline void addModParams(std::vector<std::unique_ptr<juce::RangedAudioParameter>
     auto ms = [](float v, int) { return v < 100.0f ? juce::String(v, 1) + " ms" : juce::String(juce::roundToInt(v)) + " ms"; };
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envAttack, 1 }, "Env Attack", Rng{ 0.5f, 500.0f, 0.1f, 0.4f }, 8.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envRelease, 1 }, "Env Release", Rng{ 10.0f, 2000.0f, 0.1f, 0.4f }, 180.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
+    params.push_back(std::make_unique<C>(juce::ParameterID{ ModIDs::envSource, 1 }, "Env Source", juce::StringArray{ "Input", "Sidechain" }, 0));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envDecay, 1 }, "Env Decay", Rng{ 5.0f, 2000.0f, 0.1f, 0.4f }, 120.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envSustain, 1 }, "Env Sustain", Rng{ 0.0f, 1.0f, 0.001f }, 1.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
@@ -128,6 +130,7 @@ public:
         }
         envAttack = apvts.getRawParameterValue(ModIDs::envAttack);
         envDecay = apvts.getRawParameterValue(ModIDs::envDecay);
+        envSource = apvts.getRawParameterValue(ModIDs::envSource);
         envSustain = apvts.getRawParameterValue(ModIDs::envSustain);
         envRelease = apvts.getRawParameterValue(ModIDs::envRelease);
         for (int i = 0; i < ModIDs::kSlots; ++i)
@@ -141,8 +144,12 @@ public:
     void prepare(double sampleRate) { sr = sampleRate; env = 0.0f; adsr = 0.0f; gate = false; stage = 0; slowPeak = 0.05f; for (auto& l : lfo) { l.phase = 0.0; l.rnd = 0.0f; l.rndTarget = 0.0f; l.rndPrev = 0.0f; } rng.setSeed(1234); }
 
     // Advance sources over one sub-block of input. ppq/playing come from the host transport.
-    void process(const float* inL, const float* inR, int n, double bpm, double ppq, bool playing)
+    // scL/scR: the plugin's sidechain input for this sub-block (null when none is connected).
+    void process(const float* inL, const float* inR, int n, double bpm, double ppq, bool playing,
+                 const float* scL = nullptr, const float* scR = nullptr)
     {
+        scPresent.store(scL != nullptr);
+        if (envSource->load() > 0.5f && scL != nullptr) { inL = scL; inR = scR ? scR : scL; }
         // Input-triggered ADSR: a fast peak follower, normalised by a slow running peak (so it self-adjusts to
         // any input level), opens a gate; the envelope then runs Attack -> Decay -> Sustain while the gate is
         // open and Release when it closes. Retriggers on new hits.
@@ -265,10 +272,11 @@ private:
     struct Lfo { std::atomic<float>* shape{}, * sync{}, * div{}, * rate{}; std::atomic<float>* stepP[ModIDs::kSteps] {}; std::atomic<float>* glideP{}; double phase = 0; float rnd = 0, rndTarget = 0, rndPrev = 0, smooth = 0; int cycleCount = 0; std::atomic<float> phaseVis { 0.0f }; std::atomic<int> stepVis { 0 }; };
     struct Slot { std::atomic<float>* src{}, * dst{}, * amt{}; };
     Lfo lfo[2]; Slot slot[ModIDs::kSlots];
-    std::atomic<float>* envAttack{}, * envRelease{}, * envDecay{}, * envSustain{};
+    std::atomic<float>* envAttack{}, * envRelease{}, * envDecay{}, * envSustain{}, * envSource{};
     float adsr = 0.0f, slowPeak = 0.05f; bool gate = false; int stage = 0;
 public:
-    std::atomic<bool> gateVis { false };
+    std::atomic<bool> gateVis { false }, scPresent { false };
+    bool usingSidechain() const { return envSource->load() > 0.5f; }
 private:
     std::array<juce::RangedAudioParameter*, kMaxTargets> target {};
     std::array<float, kMaxTargets> offset {}, plain {};

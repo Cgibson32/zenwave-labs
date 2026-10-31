@@ -237,9 +237,6 @@ void PulseAudioProcessorEditor::paint(juce::Graphics& g)
         g.drawText("LEVEL", juce::Rectangle<float>(712 * s, 672 * s, 130 * s, 12 * s), juce::Justification::centredLeft);
         g.setFont(juce::Font(juce::FontOptions(20.0f * s, juce::Font::bold))); g.setColour(std::abs(delta) < 1.0f ? lnf.accent2 : zwui::Palette::text);
         g.drawText((delta > 0 ? "+" : "") + juce::String(delta, 1) + " dB", juce::Rectangle<float>(712 * s, 686 * s, 130 * s, 26 * s), juce::Justification::centredLeft);
-        g.setFont(juce::Font(juce::FontOptions(8.0f * s))); g.setColour(zwui::Palette::dim);
-        g.drawText("out vs in - MATCH zeroes it", juce::Rectangle<float>(712 * s, 714 * s, 140 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText(juce::String("latency ") + juce::String(processor.getLatencySamples()) + " smp (3 ms lookahead)", juce::Rectangle<float>(712 * s, 728 * s, 140 * s, 12 * s), juce::Justification::centredLeft);
     }
     zwui::drawOrbit(g, { 392 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
