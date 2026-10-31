@@ -198,6 +198,34 @@ int main()
         }
     }
 
+    // --- Pulse: depth 0 is transparent (3 ms latency only); OTT reduces dynamic range; node cuts a loud resonance
+    {
+        zw::PulseEngine e; e.prepare(sr, 512); zw::PulseParams p; p.depth = 0.0f; p.subLock = false; e.setParams(p);
+        const int N = 49152; std::vector<float> L(N), R(N), ref(N);
+        for (int i = 0; i < N; ++i) { L[i] = R[i] = ref[i] = 0.5f * std::sin(2 * zw::kPi * 440.0f * i / float(sr)); }
+        for (int s0 = 0; s0 < N; s0 += 512) e.process(&L[s0], &R[s0], nullptr, nullptr, 512);
+        double eo = 0, ei = 0; for (int i = N / 2; i < N; ++i) { eo += L[i] * L[i]; ei += ref[i] * ref[i]; }
+        const double dDb = 10 * std::log10(eo / ei);
+        std::printf("      Pulse transparency at depth 0: level change %+.2f dB (latency %d samples; LR4 split is allpass so phase shifts, level must not)\n", dDb, e.latencySamples());
+        CHECK(std::fabs(dDb) < 0.3, "Pulse at depth 0 leaves the level unchanged (within 0.3 dB)");
+
+        zw::PulseEngine c; c.prepare(sr, 512); zw::PulseParams q; q.depth = 1.0f; q.subLock = false; q.autoMode = false; c.setParams(q);
+        const int M = 48000 * 4; std::vector<float> A(M), B(M);
+        for (int i = 0; i < M; ++i) { const float amp = (i / 12000) % 2 ? 0.7f : 0.07f; A[i] = B[i] = amp * std::sin(2 * zw::kPi * 1000.0f * i / float(sr)); }   // loud/quiet every 250 ms
+        for (int s0 = 0; s0 < M; s0 += 512) c.process(&A[s0], &B[s0], nullptr, nullptr, std::min(512, M - s0));
+        auto rmsDb = [&](int a, int b) { double en = 0; for (int i = a; i < b; ++i) en += A[i] * A[i]; return 10 * std::log10(en / (b - a) + 1e-12); };
+        const double loud = rmsDb(M - 12000 + 6000, M - 1000), quiet = rmsDb(M - 24000 + 6000, M - 12000 - 1000);
+        std::printf("      Pulse OTT: loud/quiet difference %.1f dB (input 20.0 dB)\n", loud - quiet);
+        CHECK(loud - quiet < 14.0, "Pulse at full depth narrows a 20 dB loud/quiet difference by at least 6 dB");
+
+        zw::PulseEngine d; d.prepare(sr, 512); zw::PulseParams nq; nq.depth = 0.0f; nq.node[0].on = true; nq.node[0].freqHz = 300.0f; nq.node[0].q = 3.0f; nq.node[0].range = -12.0f; d.setParams(nq);
+        std::vector<float> X(M), Y(M); float minG = 0.0f;
+        for (int i = 0; i < M; ++i) { const float burst = std::fmod(i / float(sr), 1.0f) < 0.25f ? 0.6f : 0.05f; X[i] = Y[i] = burst * std::sin(2 * zw::kPi * 300.0f * i / float(sr)) + 0.2f * std::sin(2 * zw::kPi * 2000.0f * i / float(sr)); }
+        for (int s0 = 0; s0 < M; s0 += 512) { d.process(&X[s0], &Y[s0], nullptr, nullptr, std::min(512, M - s0)); minG = std::min(minG, d.nodeGainDb(0)); }
+        std::printf("      Pulse dynamic node: deepest cut %.1f dB (range -12)\n", minG);
+        CHECK(minG < -8.0f, "Pulse dynamic-EQ node cuts the resonance when it gets loud");
+    }
+
     std::printf("\n%s (%d failure%s)\n", failures ? "TESTS FAILED" : "ALL TESTS PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

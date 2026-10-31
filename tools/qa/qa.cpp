@@ -202,6 +202,7 @@ int main()
                 set("mod3src", 3.0f); set("mod3dst", float(std::min(tg + 2, numTargets))); set("mod3amt", 0.9f);
                 run(*proc, int(sr * 0.2 / block), t, sr, b, mb, last);
                 auto s = run(*proc, int(sr * 1.2 / block), t, sr, b, mb, last);
+                if (std::getenv("ZWQA_DUMP") && s.clicks) std::printf("    [mod] shape %d targets %d..%d: %d clicks\n", shape, tg, std::min(tg + 2, numTargets), s.clicks);
                 total.finite &= s.finite; total.peak = std::max(total.peak, s.peak); total.clicks += s.clicks;
             }
             QA_CHECK(total.finite, "modulation shape %d produced NaN/Inf", shape);

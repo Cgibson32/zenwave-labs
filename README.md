@@ -66,3 +66,7 @@ Drift (free) → Umbra (dark reverb, $49) → Halo (shimmer reverb, $49) → Cor
 ## CORE - multiband heat (v0.6)
 
 Three-band saturator for bass music. LR4 crossovers (drag the lines in the spectrum, or LEARN), per-band character (Tape / Tube / Fold / Rectify / Crush) with drive, mix and gain, SUB LOCK keeps the low band clean and mono, FOCUS distorts mid or side only, auto-gain per band so louder never fools you. 4x oversampled shapers, same shell as Drift/Umbra (presets, Warp, Motion matrix, perform pad = drive x mix, manual, tooltips). 22 presets.
+
+## PULSE - multiband dynamics (v0.7)
+
+Three-band upward/downward compressor (the OTT idea) with adaptive thresholds (AUTO), 3 ms lookahead, program-dependent release, transient shaper (ATTACK / SUSTAIN), pattern duck (Steps LFO -> DUCK) and external sidechain, GRIT, and a four-node dynamic EQ drawn on the spectrum. MATCH places the splits and trims output so out = in. 19 presets, same shell as the rest of the line.
