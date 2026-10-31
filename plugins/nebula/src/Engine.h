@@ -23,12 +23,13 @@ constexpr int kFrameLen = 1024, kFrames = 32, kMips = 6, kPartials = 384, kCarve
 inline const juce::StringArray& tableNames() { return allTableNames(); }
 
 // Harmonic recipe: amplitude + phase per partial for a given table and frame position (0..1)
-inline void recipe(int table, float pos, float* amp, float* phase, juce::Random& rng)
+// f0Hint: the pitch (Hz) this frame will be played at, so formant-type tables keep their formants fixed in Hz. 0 = nominal.
+inline void recipe(int table, float pos, float* amp, float* phase, juce::Random& rng, float f0Hint = 0.0f)
 {
     for (int h = 0; h < kPartials; ++h) { amp[h] = 0.0f; phase[h] = 0.0f; }
     auto set = [&](int h, float a, float ph = 0.0f) { if (h >= 1 && h <= kPartials) { amp[h - 1] = a; phase[h - 1] = ph; } };
     const float t = pos;
-    if (table >= kLegacyTables) { recipeEx(table, t, amp, phase, rng); return; }
+    if (table >= kLegacyTables) { recipeEx(table, t, amp, phase, rng, f0Hint); return; }
     switch (table)
     {
         case 0: // Glass: pure odd/even bell partials that migrate upward; sine -> glassy chime
@@ -43,7 +44,7 @@ inline void recipe(int table, float pos, float* amp, float* phase, juce::Random&
         case 1: // Voice: formant bumps (two formants) moving through vowels on a pulse
             for (int h = 1; h <= 96; ++h)
             {
-                const float f = h * 110.0f;   // nominal at A2
+                const float f = h * (f0Hint > 0.0f ? f0Hint : 110.0f);
                 const float F1 = 300.0f + 500.0f * t, F2 = 2400.0f - 1400.0f * t;
                 const float form = std::exp(-std::pow((f - F1) / 150.0f, 2.0f)) + 0.6f * std::exp(-std::pow((f - F2) / 300.0f, 2.0f));
                 set(h, (0.08f + form) / std::pow(float(h), 0.6f));
@@ -121,6 +122,10 @@ struct Table
 };
 
 // Renders one table with a carve curve. Not realtime-safe (FFT + allocation); call from the message thread.
+// Mip bands: mip m serves fundamentals in (46.875 * 2^(m-1), 46.875 * 2^m] Hz (band-limited for 48 kHz); centre is the geometric middle.
+constexpr float kMipBaseHz = 46.875f;
+inline float mipCentreHz(int m) { return kMipBaseHz * std::pow(2.0f, float(m) - 0.5f); }
+
 class TableRenderer
 {
 public:
@@ -133,11 +138,11 @@ public:
         std::vector<juce::dsp::Complex<float>> spec(kFrameLen), time(kFrameLen);
         for (int f = 0; f < kFrames; ++f)
         {
-            juce::Random rng(1234 + table * 99 + f);   // deterministic per frame
-            recipe(table, float(f) / (kFrames - 1), amp.data(), phase.data(), rng);
-            if (carveOn) for (int h = 0; h < kPartials; ++h) amp[size_t(h)] *= carveGainAt(carve, h + 1);
             for (int m = 0; m < kMips; ++m)
             {
+                juce::Random rng(1234 + table * 99 + f);   // deterministic per frame (same seed for every mip)
+                recipe(table, float(f) / (kFrames - 1), amp.data(), phase.data(), rng, mipCentreHz(m));
+                if (carveOn) for (int h = 0; h < kPartials; ++h) amp[size_t(h)] *= carveGainAt(carve, h + 1);
                 const int maxH = juce::jmin(kPartials, (kFrameLen / 2 - 1) >> m);   // band limit per octave
                 std::fill(spec.begin(), spec.end(), juce::dsp::Complex<float>(0, 0));
                 for (int h = 1; h <= maxH; ++h)
@@ -271,13 +276,15 @@ public:
                     const float semis = basePitch + det + driftState[o][u] * p.drift * 0.25f;
                     const float hz = 440.0f * std::pow(2.0f, (semis - 69.0f) / 12.0f);
                     const float inc = hz / float(fs);
-                    // mip by frequency: partials allowed = Nyquist / hz
-                    const float maxPartials = float(fs) * 0.5f / std::max(1.0f, hz);
-                    int mip = 0; while (mip < kMips - 1 && (kFrameLen / 2 >> mip) > maxPartials) ++mip;
-                    const float* fa = tb->frame(mip, f0); const float* fb = tb->frame(mip, f1);
+                    // continuous mip: crossfade between the two octave bands around this pitch, so band-limiting and
+                    // pitch-tracked formants both move smoothly (no steps under vibrato, glide or unison detune)
+                    const float xm = std::log2(std::max(hz, 1.0f) / kMipBaseHz);           // band m covers (m-1, m]
+                    const int mA = juce::jlimit(0, kMips - 1, int(std::ceil(xm))); const int mB = std::min(kMips - 1, mA + 1);
+                    const float mf = juce::jlimit(0.0f, 1.0f, xm - float(mA - 1));
                     const float x = ph[o][u] * kFrameLen; const int xi = int(x); const float xf = x - xi;
-                    const float va = fa[xi] + (fa[xi + 1] - fa[xi]) * xf, vb = fb[xi] + (fb[xi + 1] - fb[xi]) * xf;
-                    const float v = (va + (vb - va) * ff) * osc.level / std::sqrt(float(uni));
+                    auto rd = [&](int m) { const float* fa = tb->frame(m, f0); const float* fb = tb->frame(m, f1);
+                                           const float va = fa[xi] + (fa[xi + 1] - fa[xi]) * xf, vb = fb[xi] + (fb[xi + 1] - fb[xi]) * xf; return va + (vb - va) * ff; };
+                    const float v = (mA == mB ? rd(mA) : rd(mA) * (1.0f - mf) + rd(mB) * mf) * osc.level / std::sqrt(float(uni));
                     ph[o][u] += inc; if (ph[o][u] >= 1.0f) ph[o][u] -= 1.0f;
                     const float pan = zw::clampf(uni == 1 ? 0.0f : ((u / float(uni - 1)) * 2.0f - 1.0f) * osc.width, -1.0f, 1.0f);
                     sL += v * std::sqrt(0.5f * (1.0f - pan)); sR += v * std::sqrt(0.5f * (1.0f + pan));
