@@ -73,6 +73,7 @@ namespace Presets
         // newer params: deterministic defaults, then per-preset character
         const float tuneDef[3] = { 80.0f, 800.0f, 6000.0f };
         for (int b = 0; b < 3; ++b) { setParam(apvts, ParamIDs::bandOn(b), 1.0f); setParam(apvts, ParamIDs::bandSolo(b), 0.0f); setParam(apvts, ParamIDs::bandTune(b), tuneDef[b]); setParam(apvts, ParamIDs::bandRes(b), 0.0f); }
+        setParam(apvts, ParamIDs::vowel, 0.0f); setParam(apvts, ParamIDs::punch, 0.0f);
         setParam(apvts, ParamIDs::crushOn, 0.0f); setParam(apvts, ParamIDs::crushBits, 12.0f); setParam(apvts, ParamIDs::crushRate, 0.0f); setParam(apvts, ParamIDs::crushMix, 1.0f);
         {
             const juce::String nm(p.name);
@@ -82,15 +83,20 @@ namespace Presets
             if (nm == "Broken Speaker") { setParam(apvts, ParamIDs::bandTune(1), 1800.0f); setParam(apvts, ParamIDs::bandRes(1), 0.75f); setParam(apvts, ParamIDs::crushOn, 1.0f); setParam(apvts, ParamIDs::crushBits, 9.0f); setParam(apvts, ParamIDs::crushRate, 0.25f); setParam(apvts, ParamIDs::crushMix, 0.6f); }
             if (nm == "Bit Storm")      { setParam(apvts, ParamIDs::crushOn, 1.0f); setParam(apvts, ParamIDs::crushBits, 6.0f); setParam(apvts, ParamIDs::crushRate, 0.5f); setParam(apvts, ParamIDs::crushMix, 1.0f); }
             if (nm == "Radio Vox")      { setParam(apvts, ParamIDs::bandTune(1), 2200.0f); setParam(apvts, ParamIDs::bandRes(1), 0.50f); setParam(apvts, ParamIDs::bandOn(0), 0.0f); }
-            if (nm == "Snare Crack")    { setParam(apvts, ParamIDs::bandTune(1), 220.0f);  setParam(apvts, ParamIDs::bandRes(1), 0.40f); }
+            if (nm == "Growl Glue")     { setParam(apvts, ParamIDs::vowel, 1.0f); setParam(apvts, ParamIDs::bandTune(1), 400.0f); setParam(apvts, ParamIDs::bandRes(1), 0.5f); }   // talking growl
+            if (nm == "Drum Bus Glue")  { setParam(apvts, ParamIDs::punch, -0.6f); }   // hits stay clean, body saturates
+            if (nm == "Kick Punch Tape"){ setParam(apvts, ParamIDs::punch, -0.8f); }
+            if (nm == "Vocal Warmth")   { setParam(apvts, ParamIDs::punch, -0.4f); }
+            if (nm == "Snare Crack")    { setParam(apvts, ParamIDs::punch, 0.5f); setParam(apvts, ParamIDs::bandTune(1), 220.0f);  setParam(apvts, ParamIDs::bandRes(1), 0.40f); }
         }
         setParam(apvts, ParamIDs::power, 1.0f);
         setParam(apvts, ParamIDs::lowCut, 20.0f); setParam(apvts, ParamIDs::highCut, 20000.0f);
         setParam(apvts, ParamIDs::lowSlope, 1.0f); setParam(apvts, ParamIDs::highSlope, 1.0f); setParam(apvts, ParamIDs::tilt, 0.0f);
 
         // Factory motion (targets 1-based: Drive=1 Heat Focus Width Mix LowX HighX LowDrive MidDrive HighDrive LowCut HighCut Tilt=13
-        //                                   LowTune MidTune HighTune LowRes MidRes HighRes CrushBits CrushRate=21)
+        //                                   LowTune MidTune HighTune LowRes MidRes HighRes CrushBits CrushRate Punch=22)
         const juce::String n(p.name);
+        if (n == "Growl Glue")     { zwui::setLfo(apvts, 0, 7, true, 10, 1.0f); zwui::setModSlot(apvts, 1, 1, 15, 0.45f); }   // step lane walks the vowel
         if (n == "Growl Glue")     { zwui::setModSlot(apvts, 0, 3, 9, 0.35f); }                                   // env -> mid drive: growls bite harder on hits
         if (n == "Neuro Bite")     { zwui::setLfo(apvts, 0, 5, true, 2, 1.0f); zwui::setModSlot(apvts, 0, 1, 7, 0.25f); } // S&H 1/16 on the high crossover
         if (n == "Wonky Fuzz")     { zwui::setLfo(apvts, 0, 6, true, 8, 1.0f); zwui::setModSlot(apvts, 0, 1, 2, 0.30f); zwui::setModSlot(apvts, 1, 1, 15, 0.20f); }   // drift LFO also wanders the mid resonance

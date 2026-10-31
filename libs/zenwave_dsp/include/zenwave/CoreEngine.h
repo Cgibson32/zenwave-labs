@@ -45,6 +45,8 @@ struct CoreParams
     float lowX  = 150.0f;   // 40..400
     float highX = 3500.0f;  // 1000..12000
     bool  subLock = true;
+    bool  vowel = false;    // TUNE morphs vowel formants (A E I O U) instead of a single peak
+    float punch = 0.0f;     // -1 = transients stay clean (saturate sustain) .. +1 = sustain clean (saturate transients)
     CoreBand band[3];
     CoreCrush crush;
     // wet-path EQ
@@ -98,14 +100,20 @@ public:
         envIn = envOut = 1e-4f; agGain = 1.0f; crushHold = 0.0f; crushPhase = 0.0f;
         const float a = 1.0f - std::exp(-1.0f / (0.05f * float(sr))); envA = a; agA = 1.0f - std::exp(-1.0f / (0.12f * float(sr)));
     }
-    void reset() noexcept { os.reset(); dc.reset(); pres.reset(); bpPre.reset(); bpPost.reset(); }
+    void reset() noexcept { os.reset(); dc.reset(); pres.reset(); bpPre.reset(); bpPost.reset(); bpPre2.reset(); bpPost2.reset(); }
     void set(int character, float drive, float heat) noexcept { ch = character; d = drive; h = heat; }
-    void setResonance(float hz, float amount) noexcept
+    void setResonance(float hz, float amount, float hz2 = 0.0f) noexcept
     {
         resAmt = amount * amount * 6.0f;                    // up to +17 dB of peak into the shaper
         const float q = 0.8f + amount * 5.0f;
         bpPre.setSampleRate(fs);  bpPre.setMode(SVF::Mode::Bandpass);  bpPre.setCutoff(hz);  bpPre.setResonance(q);
         bpPost.setSampleRate(fs); bpPost.setMode(SVF::Mode::Bandpass); bpPost.setCutoff(hz); bpPost.setResonance(q);
+        res2 = hz2 > 0.0f;
+        if (res2)
+        {
+            bpPre2.setSampleRate(fs);  bpPre2.setMode(SVF::Mode::Bandpass);  bpPre2.setCutoff(hz2); bpPre2.setResonance(q * 1.3f);
+            bpPost2.setSampleRate(fs); bpPost2.setMode(SVF::Mode::Bandpass); bpPost2.setCutoff(hz2); bpPost2.setResonance(q * 1.3f);
+        }
     }
 
     float process(float x) noexcept
@@ -114,7 +122,7 @@ public:
         envIn += (std::fabs(x) - envIn) * envA;
         if (d < 0.002f) { envOut = envIn; agGain = 1.0f; return x; }
         // resonant pre-emphasis: the chosen bandwidth hits the shaper harder (de-emphasised below)
-        if (resAmt > 0.001f) x += bpPre.process(x) * resAmt;
+        if (resAmt > 0.001f) { const float x0 = x; x += bpPre.process(x0) * resAmt; if (res2) x += bpPre2.process(x0) * resAmt * 0.7f; }
 
         const float pre = 1.0f + d * d * 30.0f;               // up to +30 dB into the shaper
         const float bias = h * 0.35f * d;                     // asymmetry = even harmonics
@@ -134,7 +142,7 @@ public:
             y = os.downsample(up);
             y = dc.process(y);
         }
-        if (resAmt > 0.001f) y -= bpPost.process(y) * (resAmt / (1.0f + resAmt));   // de-emphasis
+        if (resAmt > 0.001f) { const float y0 = y; y -= bpPost.process(y0) * (resAmt / (1.0f + resAmt)); if (res2) y -= bpPost2.process(y0) * (0.7f * resAmt / (1.0f + 0.7f * resAmt)); }   // de-emphasis
         // auto-gain: match wet level to dry level, slow, bounded
         envOut += (std::fabs(y) - envOut) * envA;
         const float want = clampf(envIn / std::max(envOut, 1e-5f), 0.08f, 2.5f);
@@ -158,7 +166,7 @@ private:
             default: return fastTanh(v);
         }
     }
-    Oversampler4x os; OnePole dc, pres; SVF bpPre, bpPost; float resAmt = 0.0f;
+    Oversampler4x os; OnePole dc, pres; SVF bpPre, bpPost, bpPre2, bpPost2; float resAmt = 0.0f; bool res2 = false;
     int ch = 0; float d = 0, h = 0; double fs = 48000.0;
     float envIn = 0, envOut = 0, envA = 0.001f, agGain = 1.0f, agA = 0.001f, crushHold = 0, crushPhase = 0;
 };
@@ -177,7 +185,8 @@ public:
             tiltEq[c].setSampleRate(sr);
         }
         for (int b = 0; b < 3; ++b) for (int ms = 0; ms < 2; ++ms) shaper[b][ms].prepare(sr);
-        for (auto* s : { &smMix, &smOut, &smWidth, &smSub, &smFocus, &smHeat, &smLowX, &smHighX, &smCrushMix }) { s->setSampleRate(sr); s->setTime(30.0f); }
+        for (auto* s : { &smMix, &smOut, &smWidth, &smSub, &smFocus, &smHeat, &smLowX, &smHighX, &smCrushMix, &smPunch }) { s->setSampleRate(sr); s->setTime(30.0f); }
+        tFast = 1.0f - std::exp(-1.0f / (0.0015f * float(sr))); tSlow = 1.0f - std::exp(-1.0f / (0.06f * float(sr))); envFast = envSlow = 0.0f;
         for (auto& s : smDrive) { s.setSampleRate(sr); s.setTime(30.0f); }
         for (auto& s : smBandMix) { s.setSampleRate(sr); s.setTime(30.0f); }
         for (auto& s : smBandGain) { s.setSampleRate(sr); s.setTime(30.0f); }
@@ -210,16 +219,30 @@ public:
             smBandMix[b].setTarget(p.band[b].enabled ? p.band[b].mix : 0.0f);
             const bool muted = anySolo && ! p.band[b].solo;
             smBandGain[b].setTarget(muted ? 0.0f : dbToGain(p.band[b].gain));
-            // resonance centre clamped inside the band
-            const float lo = b == 0 ? 20.0f : (b == 1 ? p.lowX : p.highX), hi = b == 0 ? p.lowX : (b == 1 ? p.highX : 20000.0f);
-            const float hz = clampf(p.band[b].tuneHz, lo * 1.05f, hi * 0.95f);
-            for (int ms = 0; ms < 2; ++ms) shaper[b][ms].setResonance(hz, p.band[b].res);
+            if (p.vowel)
+            {
+                // TUNE (log 20 Hz..20 kHz -> 0..1) sweeps A - E - I - O - U; two formants per band
+                static const float F1[5] = { 730.0f, 530.0f, 390.0f, 570.0f, 440.0f }, F2[5] = { 1090.0f, 1840.0f, 2290.0f, 840.0f, 1020.0f };
+                const float t = clampf(std::log(p.band[b].tuneHz / 20.0f) / std::log(1000.0f), 0.0f, 1.0f) * 4.0f;
+                const int i0 = clampi(int(t), 0, 3); const float f = t - float(i0);
+                const float f1 = lerp(F1[i0], F1[i0 + 1], f), f2 = lerp(F2[i0], F2[i0 + 1], f);
+                // bands below/above speech range get the formants transposed into them
+                const float shift = b == 0 ? 0.25f : (b == 2 ? 3.0f : 1.0f);
+                for (int ms = 0; ms < 2; ++ms) shaper[b][ms].setResonance(f1 * shift, p.band[b].res, f2 * shift);
+            }
+            else
+            {
+                // resonance centre clamped inside the band
+                const float lo = b == 0 ? 20.0f : (b == 1 ? p.lowX : p.highX), hi = b == 0 ? p.lowX : (b == 1 ? p.highX : 20000.0f);
+                const float hz = clampf(p.band[b].tuneHz, lo * 1.05f, hi * 0.95f);
+                for (int ms = 0; ms < 2; ++ms) shaper[b][ms].setResonance(hz, p.band[b].res);
+            }
         }
         smCrushMix.setTarget(p.crush.on ? p.crush.mix : 0.0f);
         crushQ = std::pow(2.0f, clampf(p.crush.bits, 2.0f, 16.0f) - 1.0f);
         crushStep = lerp(1.0f, 0.04f, clampf(p.crush.rate, 0.0f, 1.0f));
         smMix.setTarget(p.mix); smOut.setTarget(dbToGain(p.output)); smWidth.setTarget(p.width);
-        smSub.setTarget(p.subLock ? 1.0f : 0.0f); smFocus.setTarget(p.focus);
+        smSub.setTarget(p.subLock ? 1.0f : 0.0f); smFocus.setTarget(p.focus); smPunch.setTarget(p.punch);
     }
 
     void process(float* L, float* R, int n) noexcept
@@ -228,6 +251,15 @@ public:
         {
             const float dryL = L[i], dryR = R[i];
             const float mix = smMix.next(), out = smOut.next(), wid = smWidth.next(), sub = smSub.next(), focus = smFocus.next();
+            // PUNCH: transient-ness of the input (fast env vs slow env) decides how much of each band bypasses the shaper
+            const float punch = smPunch.next();
+            {
+                const float a = std::max(std::fabs(dryL), std::fabs(dryR));
+                envFast += (a - envFast) * (a > envFast ? tFast : tSlow * 2.0f);
+                envSlow += (a - envSlow) * tSlow;
+                transient = clampf((envFast - envSlow) / (envSlow + 1e-3f), 0.0f, 1.0f);
+            }
+            const float satWeight = 1.0f - std::fabs(punch) * (punch < 0.0f ? transient : 1.0f - transient);
             // smoothed drive / heat / crossovers: coefficients refreshed every 16 samples
             const float heatNow = smHeat.next(), lx = smLowX.next(), hx = smHighX.next();
             for (int b = 0; b < 3; ++b) driveNow[b] = smDrive[b].next();
@@ -256,6 +288,7 @@ public:
                 const float fm = focus > 0 ? 1.0f - focus : 1.0f, fsd = focus < 0 ? 1.0f + focus : 1.0f;
                 float pm = shaper[b][0].process(m * fm) + m * (1.0f - fm);
                 float ps = shaper[b][1].process(s * fsd) + s * (1.0f - fsd);
+                pm = lerp(m, pm, satWeight); ps = lerp(s, ps, satWeight);
                 float oL = pm + ps, oR = pm - ps;
                 if (b == 0)   // sub lock: low band stays clean and mono
                 {
@@ -310,6 +343,7 @@ private:
     CutFilter lowCut[2], highCut[2]; TiltEQ tiltEq[2];
     Smoother smMix, smOut, smWidth, smSub, smFocus, smBandMix[3], smBandGain[3], smDrive[3], smHeat, smLowX, smHighX;
     int character[3] = { 0, 0, 0 }; float driveNow[3] = { 0, 0, 0 }; unsigned coefCounter = 0;
+    Smoother smPunch; float tFast = 0.01f, tSlow = 0.001f, envFast = 0.0f, envSlow = 0.0f, transient = 0.0f;
     Smoother smCrushMix; float crushQ = 2048.0f, crushStep = 1.0f, crushPhase = 0.0f, crushHoldL = 0.0f, crushHoldR = 0.0f;
     float scratch[4096] {};
     float* wetTapL = nullptr; float* wetTapR = nullptr;

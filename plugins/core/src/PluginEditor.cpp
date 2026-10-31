@@ -36,6 +36,10 @@ CoreAudioProcessorEditor::CoreAudioProcessorEditor(CoreAudioProcessor& p)
     crushMix.init (*this, processor.apvts, ParamIDs::crushMix,  "C.MIX", false);
     lowX.init     (*this, processor.apvts, ParamIDs::lowX,      "LOW X", false);
     highX.init    (*this, processor.apvts, ParamIDs::highX,     "HIGH X", false);
+    punch.init(*this, processor.apvts, ParamIDs::punch, "PUNCH", false);
+    addAndMakeVisible(vowelButton);
+    vowelAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::vowel, vowelButton);
+    vowelButton.setTooltip("Vowel: TUNE morphs through A - E - I - O - U formant pairs instead of one peak (RES = how hard the vowel saturates). Talking bass in one knob; modulate TUNE with Steps for words.");
     addAndMakeVisible(crushButton);
     crushAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.apvts, ParamIDs::crushOn, crushButton);
     crushButton.setTooltip("Bit crusher on the summed wet signal: BITS = word length (16 clean - 2 destroyed), RATE = sample-rate reduction, C.MIX = blend. The locked sub stays clean.");
@@ -65,7 +69,7 @@ CoreAudioProcessorEditor::CoreAudioProcessorEditor(CoreAudioProcessor& p)
     learnButton.setTooltip("Learn: play the track for 6 seconds. Places the LOW crossover above your sub and the HIGH crossover under your top end so the bands fit this track.");
     learnButton.onClick = [this] { if (! learner.isActive()) learner.start(6.0f); };
 
-    allKnobs = { &drive, &heat, &focus, &width, &mix, &output, &lowCut, &highCut, &tilt, &crushBits, &crushRate, &crushMix, &lowX, &highX };
+    allKnobs = { &drive, &heat, &focus, &width, &mix, &output, &lowCut, &highCut, &tilt, &crushBits, &crushRate, &crushMix, &lowX, &highX, &punch };
     for (int b = 0; b < 3; ++b) { allKnobs.push_back(&bandDrive[b]); allKnobs.push_back(&bandMix[b]); allKnobs.push_back(&bandGain[b]); allKnobs.push_back(&bandTune[b]); allKnobs.push_back(&bandRes[b]); }
     installLocks();
 
@@ -177,6 +181,8 @@ void CoreAudioProcessorEditor::paint(juce::Graphics& g)
     g.setColour(zwui::Palette::dim);
     g.drawText("BIT CRUSHER", juce::Rectangle<float>(176 * s, 374 * s, 320 * s, 10 * s), juce::Justification::centredLeft);
     g.drawText("BAND SPLITS", juce::Rectangle<float>(536 * s, 374 * s, 160 * s, 10 * s), juce::Justification::centredLeft);
+    g.drawText("DYNAMICS  /  VOWEL", juce::Rectangle<float>(722 * s, 374 * s, 136 * s, 10 * s), juce::Justification::centredLeft);
+    g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(716 * s), 300 * s, 372 * s);
     g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(162 * s), 300 * s, 372 * s); g.drawVerticalLine(int(522 * s), 300 * s, 372 * s);
 
     // band column titles + auto-gain readout + column separators + resonance mini-curve
@@ -212,7 +218,16 @@ void CoreAudioProcessorEditor::paint(juce::Graphics& g)
             zwui::glowStroke(g, curve, lnf.accent2.withAlpha(0.3f + 0.6f * res), 1.3f * s, 0.6f);
             g.setColour(lnf.accent.withAlpha(0.5f)); g.drawRoundedRectangle(r, 8.0f * s, 1.0f);
             g.setFont(juce::Font(juce::FontOptions(7.5f * s, juce::Font::bold))); g.setColour(zwui::Palette::dim);
-            g.drawText("SELECTIVE SAT", r.withTrimmedTop(r.getHeight() - 11 * s), juce::Justification::centred);
+            if (vowelButton.getToggleState())
+            {
+                const float tn = juce::jlimit(0.0f, 1.0f, std::log(float(bandTune[b].slider.getValue()) / 20.0f) / std::log(1000.0f)) * 4.0f;
+                static const char* vowels[5] = { "A", "E", "I", "O", "U" };
+                g.setFont(juce::Font(juce::FontOptions(22.0f * s, juce::Font::bold)));
+                g.setColour(lnf.accent2.withAlpha(0.25f + 0.6f * res));
+                g.drawText(vowels[juce::jlimit(0, 4, juce::roundToInt(tn))], r.withTrimmedBottom(10 * s), juce::Justification::centred);
+            }
+            g.setFont(juce::Font(juce::FontOptions(7.5f * s, juce::Font::bold))); g.setColour(zwui::Palette::dim);
+            g.drawText(vowelButton.getToggleState() ? "VOWEL SAT" : "SELECTIVE SAT", r.withTrimmedTop(r.getHeight() - 11 * s), juce::Justification::centred);
         }
     }
 
@@ -244,6 +259,8 @@ void CoreAudioProcessorEditor::resized()
     crushMix.layout (S(422), S(306), S(72), S(66), S(11));
     lowX.layout     (S(536), S(306), S(72), S(66), S(11));
     highX.layout    (S(616), S(306), S(72), S(66), S(11));
+    punch.layout    (S(722), S(306), S(72), S(66), S(11));
+    vowelButton.setBounds(S(798), S(324), S(58), S(26));
 
     for (int b = 0; b < 3; ++b)
     {

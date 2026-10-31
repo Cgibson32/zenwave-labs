@@ -27,6 +27,7 @@ inline ManualSection motionSection()
 {
     return { "MOTION", "Two LFOs and an envelope follower you can route to almost any knob. Modulated knobs show a range arc and a moving cyan dot.",
         { { "LFO 1 / LFO 2", "Shape: Sine, Triangle, Saw Up, Saw Down, Square, Random (stepped) and Drift (smooth random). SYNC locks the rate to the host tempo and phase - one cycle per division, lined up to the bar. Unsynced, RATE sets it in Hz (0.02-20)." },
+          { "Steps (LFO shape)", "A 16-step lane you draw straight into the LFO display: drag to set each step (bipolar), Shift = quantise to quarters, Alt = clear. One pass = the LFO's division (1/1 = a step per 1/16). GLIDE slides steps into each other. Both LFOs can read the same lane at different rates." },
           { "ENV FOLLOW", "Tracks the loudness of the input. ATTACK = how fast it rises, RELEASE = how fast it falls, SENS = how hard a normal signal pushes it. The bar shows the live value. Use it to make the effect react to your playing - e.g. more decay on hits, less mix when the vocal is busy." },
           { "ROUTING", "Four slots: source -> target -> amount. The amount knob is bipolar: turn left for inverted modulation. LFOs swing +/- around the knob's position; ENV pushes it one way. Several slots can hit the same target - they add." },
           { "Tip", "Synced LFO on TIME (Drift) gives octave-locked pitch wobbles; Drift LFO on WIDTH or COLOR gives slow, living tails nobody can quite place." } } };

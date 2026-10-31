@@ -11,8 +11,11 @@ namespace zwui {
 class ModPanel : public juce::Component
 {
 public:
-    ModPanel(juce::AudioProcessorValueTreeState& apvts, ModMatrix& m, LookAndFeel& l) : mod(m), lnf(l)
+    ModPanel(juce::AudioProcessorValueTreeState& apvts, ModMatrix& m, LookAndFeel& l) : mod(m), lnf(l), state(apvts)
     {
+        for (int i = 0; i < ModIDs::kSteps; ++i) stepParam[i] = apvts.getParameter(ModIDs::step(i));
+        glide.init(*this, apvts, ModIDs::seqGlide, "GLIDE", false, false);
+        glide.slider.setTooltip("Step glide: how much each step slides into the next (0 = hard steps, 100 % = fully smoothed)");
         for (int i = 0; i < 2; ++i)
         {
             auto& L = lfo[i];
@@ -40,7 +43,7 @@ public:
         }
         for (int i = 0; i < 2; ++i)
         {
-            lfo[i].shape.setTooltip("LFO shape: Sine, Triangle, Saw Up, Saw Down, Square, Random (stepped), Drift (smooth random)");
+            lfo[i].shape.setTooltip("LFO shape: Sine, Triangle, Saw Up, Saw Down, Square, Random (stepped), Drift (smooth random), Steps (draw a 16-step lane in the display; one lane shared by both LFOs)");
             lfo[i].sync.setTooltip("Sync: one LFO cycle per division, phase-locked to the host bar");
             lfo[i].div.setTooltip("LFO division when SYNC is on");
             lfo[i].rate.slider.setTooltip("LFO rate in Hz when SYNC is off (0.02-20 Hz)");
@@ -54,13 +57,31 @@ public:
             S.dst.setTooltip("Which knob this slot moves");
             S.amt.slider.setTooltip("Amount: how far the source moves the target. Negative = inverted. LFOs swing both ways around the knob; ENV pushes one way.");
         }
-        setInterceptsMouseClicks(false, true);
+        setInterceptsMouseClicks(true, true);
     }
+
+    // Step lane editing: drag inside an LFO scope whose shape is "Steps"
+    int scopeAt(juce::Point<float> p) const { for (int i = 0; i < 2; ++i) if (lfo[i].scope.contains(p) && lfo[i].shape.getSelectedId() == 8) return i; return -1; }
+    void mouseDown(const juce::MouseEvent& e) override { editing = scopeAt(e.position); if (editing >= 0) { for (auto* p : stepParam) p->beginChangeGesture(); mouseDrag(e); } }
+    void mouseDrag(const juce::MouseEvent& e) override
+    {
+        if (editing < 0) return;
+        const auto r = lfo[editing].scope.reduced(6.0f * sc, 6.0f * sc);
+        const int st = juce::jlimit(0, ModIDs::kSteps - 1, int((e.position.x - r.getX()) / r.getWidth() * ModIDs::kSteps));
+        float v = juce::jlimit(-1.0f, 1.0f, 1.0f - 2.0f * (e.position.y - r.getY()) / r.getHeight());
+        if (e.mods.isShiftDown()) v = std::round(v * 4.0f) / 4.0f;             // shift = quantise to quarters
+        if (e.mods.isAltDown()) v = 0.0f;                                        // alt = clear
+        stepParam[st]->setValueNotifyingHost(stepParam[st]->convertTo0to1(v));
+        repaint();
+    }
+    void mouseUp(const juce::MouseEvent&) override { if (editing >= 0) for (auto* p : stepParam) p->endChangeGesture(); editing = -1; }
 
     // scale = editor width / 880
     void layoutScaled(float s)
     {
+        sc = s;
         auto S = [s](float v) { return juce::roundToInt(v * s); };
+        glide.layout(S(18 + 132), S(76), S(66), S(66), S(11));   // sits where LFO 1's RATE sits; shown only in Steps mode
         for (int i = 0; i < 2; ++i)
         {
             auto& L = lfo[i]; const int x0 = S(18 + i * 212);
@@ -86,12 +107,18 @@ public:
 
     void tick()
     {
+        bool anySteps = false;
         for (int i = 0; i < 2; ++i)
         {
             const bool sync = lfo[i].sync.getToggleState();
+            const bool steps = lfo[i].shape.getSelectedId() == 8;
+            anySteps |= steps;
             lfo[i].div.setEnabled(sync); lfo[i].div.setAlpha(sync ? 1.0f : 0.4f);
             lfo[i].rate.slider.setAlpha(sync ? 0.35f : 1.0f);
+            if (i == 0) { lfo[0].rate.slider.setVisible(! steps); lfo[0].rate.label.setVisible(! steps); }
         }
+        glide.slider.setVisible(lfo[0].shape.getSelectedId() == 8); glide.label.setVisible(lfo[0].shape.getSelectedId() == 8);
+        juce::ignoreUnused(anySteps);
         for (auto& Sl : slot) { const bool on = Sl.src.getSelectedId() > 1 && Sl.dst.getSelectedId() > 1; Sl.amt.slider.setAlpha(on ? 1.0f : 0.4f); }
         repaint();
     }
@@ -135,6 +162,28 @@ private:
         g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawHorizontalLine(int(r.getCentreY()), r.getX(), r.getRight());
         const int shape = lfo[i].shape.getSelectedId() - 1;
         const float ph = mod.lfoPhase(i);
+        if (shape == 7)
+        {
+            // 16-step lane: bars from the centre line, lit step follows the phase
+            const auto in = r.reduced(6.0f * s, 6.0f * s);
+            const float w = in.getWidth() / ModIDs::kSteps;
+            const int cur = mod.lfoStep(i);
+            for (int st = 0; st < ModIDs::kSteps; ++st)
+            {
+                const float v = stepParam[st]->convertFrom0to1(stepParam[st]->getValue());
+                const float x = in.getX() + st * w;
+                const float y0 = in.getCentreY(), y1 = in.getCentreY() - v * in.getHeight() * 0.5f;
+                auto bar = juce::Rectangle<float>(x + 1.0f, juce::jmin(y0, y1), w - 2.0f, std::abs(y1 - y0));
+                g.setColour((st == cur ? juce::Colours::white : lnf.accent2).withAlpha(st == cur ? 0.95f : 0.55f));
+                g.fillRoundedRectangle(bar, 1.5f);
+                if (st % 4 == 0) { g.setColour(juce::Colours::white.withAlpha(0.08f)); g.drawVerticalLine(int(x), in.getY(), in.getBottom()); }
+            }
+            g.setColour(juce::Colours::white.withAlpha(0.2f)); g.drawVerticalLine(int(in.getX() + in.getWidth() * ph), in.getY(), in.getBottom());
+            g.setColour(lnf.accent.withAlpha(0.5f)); g.drawRoundedRectangle(r, 8.0f * s, 1.0f);
+            g.setFont(juce::Font(juce::FontOptions(7.0f * s, juce::Font::bold))); g.setColour(Palette::dim);
+            g.drawText("DRAW   -   SHIFT: QUANTISE   -   ALT: CLEAR", r.withTrimmedTop(r.getHeight() - 10.0f * s), juce::Justification::centred);
+            return;
+        }
         juce::Path p;
         const int N = 96;
         juce::Random rr(77 + i);
@@ -151,6 +200,7 @@ private:
                 case 3: v = 1.0f - 2.0f * t; break;
                 case 4: v = t < 0.5f ? 1.0f : -1.0f; break;
                 case 5: v = t < 0.5f ? rndA : rndB; break;
+                case 7: v = 0.0f; break;
                 default: { const float u = t < 0.5f ? t * 2 : (t - 0.5f) * 2; const float a = t < 0.5f ? rndA : rndB, b = t < 0.5f ? rndB : rndA; const float e = u * u * (3 - 2 * u); v = a + (b - a) * e; } break;
             }
             const float x = r.getX() + 6.0f * s + (r.getWidth() - 12.0f * s) * t;
@@ -184,9 +234,11 @@ private:
                    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttach; };
     struct SlotUI { juce::ComboBox src, dst; Knob amt; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> srcAttach, dstAttach; };
     LfoUI lfo[2]; SlotUI slot[ModIDs::kSlots];
-    Knob attack, release, sens;
+    Knob attack, release, sens, glide;
     juce::Rectangle<float> envMeter;
-    ModMatrix& mod; LookAndFeel& lnf;
+    ModMatrix& mod; LookAndFeel& lnf; juce::AudioProcessorValueTreeState& state;
+    juce::RangedAudioParameter* stepParam[ModIDs::kSteps] {};
+    int editing = -1; float sc = 1.0f;
 };
 
 } // namespace zwui

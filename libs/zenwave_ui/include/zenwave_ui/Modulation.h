@@ -26,7 +26,10 @@ struct ModIDs
     static juce::String slotDst(int i) { return "mod" + juce::String(i + 1) + "dst"; }
     static juce::String slotAmt(int i) { return "mod" + juce::String(i + 1) + "amt"; }
 
-    static juce::StringArray shapeNames() { return { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Random", "Drift" }; }
+    static juce::StringArray shapeNames() { return { "Sine", "Triangle", "Saw Up", "Saw Down", "Square", "Random", "Drift", "Steps" }; }
+    static constexpr int kSteps = 16;
+    static juce::String step(int i) { return "seqstep" + juce::String(i + 1); }
+    static constexpr auto seqGlide = "seqglide";
     static juce::StringArray sourceNames() { return { "Off", "LFO1", "LFO2", "ENV" }; }
 };
 
@@ -52,6 +55,13 @@ inline void addModParams(std::vector<std::unique_ptr<juce::RangedAudioParameter>
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envRelease, 1 }, "Env Release", Rng{ 10.0f, 2000.0f, 0.1f, 0.4f }, 180.0f, juce::AudioParameterFloatAttributes().withStringFromValueFunction(ms)));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::envSens, 1 }, "Env Sensitivity", Rng{ 0.0f, 1.0f, 0.001f }, 0.5f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
+    // 16-step lane shared by any LFO set to "Steps" (one cycle = the LFO's division)
+    for (int i = 0; i < ModIDs::kSteps; ++i)
+        params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::step(i), 1 }, "Step " + juce::String(i + 1), Rng{ -1.0f, 1.0f, 0.001f },
+            (i % 4 == 0) ? 1.0f : (i % 2 == 0 ? 0.0f : -0.5f),
+            juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return (v > 0 ? "+" : "") + juce::String(juce::roundToInt(v * 100)) + " %"; })));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ModIDs::seqGlide, 1 }, "Step Glide", Rng{ 0.0f, 1.0f, 0.001f }, 0.1f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v * 100)) + " %"; })));
     for (int i = 0; i < ModIDs::kSlots; ++i)
     {
         const auto n = "Mod " + juce::String(i + 1) + " ";
@@ -67,7 +77,7 @@ inline void resetModParams(juce::AudioProcessorValueTreeState& apvts)
 {
     for (auto* p : apvts.processor.getParameters())
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p))
-            if (rp->paramID.startsWith("lfo") || rp->paramID.startsWith("env") || rp->paramID.startsWith("mod"))
+            if (rp->paramID.startsWith("lfo") || rp->paramID.startsWith("env") || rp->paramID.startsWith("mod") || rp->paramID.startsWith("seq"))
             { rp->beginChangeGesture(); rp->setValueNotifyingHost(rp->getDefaultValue()); rp->endChangeGesture(); }
 }
 // Set one slot of the matrix (used by factory presets that ship with motion)
@@ -98,6 +108,8 @@ public:
             lfo[i].div   = apvts.getRawParameterValue(ModIDs::lfoDiv(i));
             lfo[i].rate  = apvts.getRawParameterValue(ModIDs::lfoRate(i));
         }
+        for (int i = 0; i < ModIDs::kSteps; ++i) stepP[i] = apvts.getRawParameterValue(ModIDs::step(i));
+        glideP = apvts.getRawParameterValue(ModIDs::seqGlide);
         envAttack = apvts.getRawParameterValue(ModIDs::envAttack);
         envRelease = apvts.getRawParameterValue(ModIDs::envRelease);
         envSens = apvts.getRawParameterValue(ModIDs::envSens);
@@ -150,11 +162,14 @@ public:
                 case 3: v = 1.0f - 2.0f * ph; break;
                 case 4: v = ph < 0.5f ? 1.0f : -1.0f; break;
                 case 5: v = l.rndTarget; break;                                                      // sample & hold
+                case 7: { const int st = juce::jlimit(0, ModIDs::kSteps - 1, int(ph * ModIDs::kSteps)); v = stepP[st]->load(); l.stepVis.store(st); } break;   // step lane
                 default: { const float t = ph * ph * (3.0f - 2.0f * ph); v = l.rndPrev + (l.rndTarget - l.rndPrev) * t; } break;  // smooth drift
             }
-            // de-click square / S&H with a one-pole (≈ 3 ms)
-            const float k = std::exp(-float(n) / (float(sr) * 0.003f));
-            l.smooth = (int(l.shape->load()) == 4 || int(l.shape->load()) == 5) ? k * l.smooth + (1.0f - k) * v : v;
+            // de-click square / S&H with a one-pole (≈ 3 ms); steps glide by a fraction of a step
+            const int shp = int(l.shape->load());
+            float k = std::exp(-float(n) / (float(sr) * 0.003f));
+            if (shp == 7) { const float g = glideP->load(); const double stepSec = cycleSec / ModIDs::kSteps; k = std::exp(-float(n) / float(sr * std::max(0.002, stepSec * (0.03 + g * 0.9)))); }
+            l.smooth = (shp == 4 || shp == 5 || shp == 7) ? k * l.smooth + (1.0f - k) * v : v;
             src[1 + i] = l.smooth;
             l.phaseVis.store(ph);
         }
@@ -210,12 +225,14 @@ public:
     std::array<std::atomic<float>, 3> vis {};                  // lfo1, lfo2, env (editor)
     std::array<std::atomic<float>, kMaxTargets> modPos {};     // normalised modulated pos per target, -1 = none
     float lfoPhase(int i) const { return lfo[i].phaseVis.load(); }
+    int   lfoStep(int i) const { return lfo[i].stepVis.load(); }
 
 private:
-    struct Lfo { std::atomic<float>* shape{}, * sync{}, * div{}, * rate{}; double phase = 0; float rnd = 0, rndTarget = 0, rndPrev = 0, smooth = 0; int cycleCount = 0; std::atomic<float> phaseVis { 0.0f }; };
+    struct Lfo { std::atomic<float>* shape{}, * sync{}, * div{}, * rate{}; double phase = 0; float rnd = 0, rndTarget = 0, rndPrev = 0, smooth = 0; int cycleCount = 0; std::atomic<float> phaseVis { 0.0f }; std::atomic<int> stepVis { 0 }; };
     struct Slot { std::atomic<float>* src{}, * dst{}, * amt{}; };
     Lfo lfo[2]; Slot slot[ModIDs::kSlots];
     std::atomic<float>* envAttack{}, * envRelease{}, * envSens{};
+    std::atomic<float>* stepP[ModIDs::kSteps] {}; std::atomic<float>* glideP{};
     std::array<juce::RangedAudioParameter*, kMaxTargets> target {};
     std::array<float, kMaxTargets> offset {}, plain {};
     float src[4] = { 0, 0, 0, 0 };

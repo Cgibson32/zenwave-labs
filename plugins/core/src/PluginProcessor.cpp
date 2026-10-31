@@ -24,6 +24,7 @@ CoreAudioProcessor::CoreAudioProcessor()
     }
     pCrushOn = apvts.getRawParameterValue(ParamIDs::crushOn);
     pCrushMix = apvts.getRawParameterValue(ParamIDs::crushMix);
+    pVowel = apvts.getRawParameterValue(ParamIDs::vowel);
     mod.attach(apvts, coreModTargets());
     pad.attach(apvts);
     bank.setAlwaysLocked({ ParamIDs::power, ParamIDs::output, ParamIDs::mix, ParamIDs::subLock,
@@ -85,6 +86,9 @@ APVTS::ParameterLayout CoreAudioProcessor::createLayout()
         juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return juce::String(v, 1) + " bit"; })));
     params.push_back(pct(ParamIDs::crushRate, "Crush Rate", 0.0f));
     params.push_back(pct(ParamIDs::crushMix, "Crush Mix", 1.0f));
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::vowel, 1 }, "Vowel", false));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::punch, 1 }, "Punch", Rng{ -1.0f, 1.0f, 0.001f }, 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float v, int) { return v < -0.01f ? "Keep hits " + juce::String(juce::roundToInt(-v * 100)) + " %" : v > 0.01f ? "Hit only " + juce::String(juce::roundToInt(v * 100)) + " %" : juce::String("Off"); })));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::lowCut, 1 }, "Low Cut", Rng{ 20.0f, 2000.0f, 0.1f, 0.35f }, 20.0f, hzAttr));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::highCut, 1 }, "High Cut", Rng{ 1000.0f, 20000.0f, 1.0f, 0.5f }, 20000.0f, hzAttr));
     params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::lowSlope, 1 }, "Low Slope", juce::StringArray{ "6 dB", "12 dB", "24 dB", "48 dB" }, 1));
@@ -140,6 +144,7 @@ void CoreAudioProcessor::updateEngineParams()
         c.band[b].tuneHz = M(tuneT[b]);
         c.band[b].res = M(resT[b]);
     }
+    c.vowel = pVowel->load() > 0.5f; c.punch = M(ModT::Punch);
     c.crush.on = pCrushOn->load() > 0.5f; c.crush.bits = M(ModT::CrushBits); c.crush.rate = M(ModT::CrushRate); c.crush.mix = pCrushMix->load();
     c.lowCutHz = M(ModT::LowCut); c.highCutHz = M(ModT::HighCut);
     c.lowSlope = int(pLowSlope->load()); c.highSlope = int(pHighSlope->load()); c.tilt = M(ModT::Tilt);

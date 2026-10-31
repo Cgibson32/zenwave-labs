@@ -36,10 +36,12 @@ namespace ParamIDs
     inline constexpr auto crushBits = "crushbits";
     inline constexpr auto crushRate = "crushrate";
     inline constexpr auto crushMix  = "crushmix";
+    inline constexpr auto vowel     = "vowel";
+    inline constexpr auto punch     = "punch";
 }
 
 namespace ModT { enum { Drive, Heat, Focus, Width, Mix, LowX, HighX, LowDrive, MidDrive, HighDrive, LowCut, HighCut, Tilt,
-                        LowTune, MidTune, HighTune, LowRes, MidRes, HighRes, CrushBits, CrushRate, Count }; }
+                        LowTune, MidTune, HighTune, LowRes, MidRes, HighRes, CrushBits, CrushRate, Punch, Count }; }
 inline const std::vector<zwui::ModTarget>& coreModTargets()
 {
     static const std::vector<zwui::ModTarget> t {
@@ -47,7 +49,7 @@ inline const std::vector<zwui::ModTarget>& coreModTargets()
         { ParamIDs::lowX, "Low X" }, { ParamIDs::highX, "High X" }, { "b1drive", "Low Drive" }, { "b2drive", "Mid Drive" }, { "b3drive", "High Drive" },
         { ParamIDs::lowCut, "Low Cut" }, { ParamIDs::highCut, "High Cut" }, { ParamIDs::tilt, "Tilt" },
         { "b1tune", "Low Tune" }, { "b2tune", "Mid Tune" }, { "b3tune", "High Tune" }, { "b1res", "Low Res" }, { "b2res", "Mid Res" }, { "b3res", "High Res" },
-        { ParamIDs::crushBits, "Crush Bits" }, { ParamIDs::crushRate, "Crush Rate" } };
+        { ParamIDs::crushBits, "Crush Bits" }, { ParamIDs::crushRate, "Crush Rate" }, { ParamIDs::punch, "Punch" } };
     return t;
 }
 
@@ -103,7 +105,7 @@ private:
 
     std::atomic<float>* pOutput{}, * pSubLock{}, * pPower{}, * pLowSlope{}, * pHighSlope{};
     std::atomic<float>* pBandChar[3]{}, * pBandMix[3]{}, * pBandGain[3]{}, * pBandOn[3]{}, * pBandSolo[3]{};
-    std::atomic<float>* pCrushOn{}, * pCrushMix{};
+    std::atomic<float>* pCrushOn{}, * pCrushMix{}, * pVowel{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CoreAudioProcessor)
 };

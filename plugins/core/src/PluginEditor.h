@@ -97,8 +97,9 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> bandCharAttach[3];
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bandOnAttach[3], bandSoloAttach[3];
     zwui::Knob crushBits, crushRate, crushMix, lowX, highX;    // heat row
-    juce::ToggleButton crushButton { "CRUSH" };
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> crushAttach;
+    juce::ToggleButton crushButton { "CRUSH" }, vowelButton { "VOWEL" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> crushAttach, vowelAttach;
+    zwui::Knob punch;
     zwui::Knob lowCut, highCut, tilt, output;
     juce::ComboBox lowSlopeBox, highSlopeBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lowSlopeAttach, highSlopeAttach;

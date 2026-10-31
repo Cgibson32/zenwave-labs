@@ -25,7 +25,8 @@ namespace CoreManual
               { "RATE", "Sample-rate reduction of the crusher: 0 = full rate, 100 % = a handful of kHz. Aliasing becomes part of the sound.", "crushrate" },
               { "C.MIX", "How much of the crushed signal replaces the clean saturated one.", "crushmix" },
               { "LOW X / HIGH X", "The band split frequencies (also draggable as lines in the spectrum). LOW X 40-400 Hz, HIGH X 1-12 kHz.", "lowx" },
-              { "HIGH X", "Upper band split, 1-12 kHz.", "highx" } } });
+              { "HIGH X", "Upper band split, 1-12 kHz.", "highx" },
+              { "PUNCH (dynamics)", "Splits each band into hits and body. Left (Keep hits): transients pass clean while the sustain saturates - heavy drive that still punches. Right (Hit only): only the transients distort, the body stays clean - crack on snares, click on kicks. Centre = off. Modulatable.", "punch" } } });
 
         v.push_back({ "BANDS", "LOW | MID | HIGH. Each band has a character, its own drive, a parallel mix and a gain.",
             { { "Character", "Tape = smooth, rounded, musical. Tube = warm with even harmonics. Fold = wavefolder, synth-like and gnarly at high drive. Rectify = half-wave fuzz, aggressive and buzzy. Crush = bit and sample-rate reduction (deliberately aliased)." },
