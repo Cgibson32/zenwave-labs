@@ -33,7 +33,7 @@ NebulaAudioProcessor::NebulaAudioProcessor()
     pSatType = apvts.getRawParameterValue(ParamIDs::satType); pSatBias = apvts.getRawParameterValue(ParamIDs::satBias); pSatLow = apvts.getRawParameterValue(ParamIDs::satLow); pSatOut = apvts.getRawParameterValue(ParamIDs::satOut);
     pGlueUp = apvts.getRawParameterValue(ParamIDs::glueUp); pGlueDown = apvts.getRawParameterValue(ParamIDs::glueDown); pGlueMix = apvts.getRawParameterValue(ParamIDs::glueMix); pGlueOut = apvts.getRawParameterValue(ParamIDs::glueOut);
     pEchoWidth = apvts.getRawParameterValue(ParamIDs::echoWidth);
-    pChorusOn = apvts.getRawParameterValue(ParamIDs::chorusOn); pChorusMode = apvts.getRawParameterValue(ParamIDs::chorusMode); pChorusRate = apvts.getRawParameterValue(ParamIDs::chorusRate);
+    pChorusOn = apvts.getRawParameterValue(ParamIDs::chorusOn); pChorusMode = apvts.getRawParameterValue(ParamIDs::chorusMode); pChorusRate = apvts.getRawParameterValue(ParamIDs::chorusRate); pChorusFb = apvts.getRawParameterValue(ParamIDs::chorusFb);
     pSpaceOn = apvts.getRawParameterValue(ParamIDs::spaceOn); pSpacePre = apvts.getRawParameterValue(ParamIDs::spacePre); pSpaceLow = apvts.getRawParameterValue(ParamIDs::spaceLow); pSpaceShimmer = apvts.getRawParameterValue(ParamIDs::spaceShimmer);
     for (int i = 0; i < 4; ++i) { pEqOn[i] = apvts.getRawParameterValue(ParamIDs::eqOn(i)); pEqType[i] = apvts.getRawParameterValue(ParamIDs::eqType(i)); pEqFreq[i] = apvts.getRawParameterValue(ParamIDs::eqFreq(i)); pEqQ[i] = apvts.getRawParameterValue(ParamIDs::eqQ(i)); }
     pSatOn = apvts.getRawParameterValue(ParamIDs::satOn); pSatMix = apvts.getRawParameterValue(ParamIDs::satMix);
@@ -165,9 +165,10 @@ APVTS::ParameterLayout NebulaAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::spaceLow, 1 }, "Space Low Cut", Rng{ 20.0f, 800.0f, 0.1f, 0.4f }, 90.0f, hzAttr));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::spaceShimmer, 1 }, "Space Shimmer", false));
     params.push_back(pct(ParamIDs::vibrato, "Vibrato", 0.0f)); params.push_back(pct(ParamIDs::breath, "Breath", 0.0f)); params.push_back(pct(ParamIDs::evolve, "Evolve", 0.0f));
-    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::chorusOn, 1 }, "Chorus", false));
-    params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::chorusMode, 1 }, "Chorus Mode", juce::StringArray{ "Chorus I", "Chorus II", "Ensemble" }, 2));
-    params.push_back(pct(ParamIDs::chorusRate, "Chorus Rate", 0.4f)); params.push_back(pct(ParamIDs::chorusDepth, "Chorus Depth", 0.5f)); params.push_back(pct(ParamIDs::chorusMix, "Chorus Mix", 0.5f));
+    params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::chorusOn, 1 }, "Mod FX", false));
+    params.push_back(std::make_unique<C>(juce::ParameterID{ ParamIDs::chorusMode, 1 }, "Mod FX Mode", juce::StringArray{ "Chorus I", "Chorus II", "Ensemble", "Flanger", "Phaser" }, 2));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::chorusFb, 1 }, "Mod FX Feedback", Rng{ -0.9f, 0.9f, 0.001f }, 0.0f, biAttr));
+    params.push_back(pct(ParamIDs::chorusRate, "Mod FX Rate", 0.4f)); params.push_back(pct(ParamIDs::chorusDepth, "Mod FX Depth", 0.5f)); params.push_back(pct(ParamIDs::chorusMix, "Mod FX Mix", 0.5f));
     params.push_back(pct(ParamIDs::duck, "Duck", 0.0f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::duckRelease, 1 }, "Duck Release", Rng{ 20.0f, 1500.0f, 1.0f, 0.5f }, 250.0f, msAttr));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::volume, 1 }, "Volume", Rng{ -36.0f, 6.0f, 0.1f }, -6.0f,
@@ -262,7 +263,7 @@ void NebulaAudioProcessor::updateVoiceParams()
     for (int i = 0; i < 4; ++i) { fxp.eq[i].on = pEqOn[i]->load() > 0.5f; fxp.eq[i].type = int(pEqType[i]->load()); fxp.eq[i].freq = pEqFreq[i]->load(); fxp.eq[i].gainDb = M(eqG[i]); fxp.eq[i].q = pEqQ[i]->load(); }
     fxp.satOn = pSatOn->load() > 0.5f; fxp.satType = int(pSatType->load()); fxp.satDrive = M(ModT::SatDrive); fxp.satTone = juce::jlimit(-1.0f, 1.0f, M(ModT::SatTone)); fxp.satBias = pSatBias->load(); fxp.satLowHz = pSatLow->load(); fxp.satOutDb = pSatOut->load(); fxp.satMix = pSatMix->load();
     fxp.glueOn = pGlueOn->load() > 0.5f; fxp.glueDepth = M(ModT::GlueDepth); fxp.glueTime = pGlueTime->load(); fxp.glueUp = pGlueUp->load(); fxp.glueDown = pGlueDown->load(); fxp.glueMix = pGlueMix->load(); fxp.glueOutDb = pGlueOut->load();
-    fxp.chorusOn = pChorusOn->load() > 0.5f; fxp.chorusMode = int(pChorusMode->load()); fxp.chorusRate = pChorusRate->load(); fxp.chorusDepth = juce::jlimit(0.0f, 1.0f, M(ModT::ChorusDepth)); fxp.chorusMix = juce::jlimit(0.0f, 1.0f, M(ModT::ChorusMix));
+    fxp.chorusOn = pChorusOn->load() > 0.5f; fxp.chorusMode = int(pChorusMode->load()); fxp.chorusRate = pChorusRate->load(); fxp.chorusDepth = juce::jlimit(0.0f, 1.0f, M(ModT::ChorusDepth)); fxp.chorusMix = juce::jlimit(0.0f, 1.0f, M(ModT::ChorusMix)); fxp.chorusFb = pChorusFb->load();
     fxp.echoOn = pEchoOn->load() > 0.5f; fxp.echoFeedback = M(ModT::EchoFb); fxp.echoMix = M(ModT::EchoMix); fxp.echoTone = M(ModT::EchoTone); fxp.echoWobble = juce::jlimit(0.0f, 1.0f, M(ModT::EchoWobble)); fxp.echoWidth = pEchoWidth->load(); fxp.echoPingPong = pEchoPP->load() > 0.5f;
     fxp.echoTimeMs = pEchoSync->load() > 0.5f ? float(zwui::divisionSeconds(int(pEchoDiv->load()), hostBpm) * 1000.0) : pEchoTime->load();
     fx.set(fxp);

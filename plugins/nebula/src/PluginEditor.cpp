@@ -85,9 +85,9 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     vibrato.init(*this, s, ParamIDs::vibrato, "VIBRATO", false, false); breath.init(*this, s, ParamIDs::breath, "BREATH", false, false); evolve.init(*this, s, ParamIDs::evolve, "EVOLVE", false, false);
     evolve.slider.setTooltip("Evolve: every note drifts its own position, filter, pan and level on slow clocks no two notes share. The pad never sits still. MOVEMENT adds some too.");
     addAndMakeVisible(chorusButton); chorusAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::chorusOn, chorusButton);
-    chorusButton.setTooltip("Chorus / Ensemble: BBD-style modulated delays. Ensemble is three voices - the classic string-machine / dream-pad wash");
-    addAndMakeVisible(chorusModeBox); chorusModeBox.addItemList({ "Chorus I", "Chorus II", "Ensemble" }, 1); chorusModeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(s, ParamIDs::chorusMode, chorusModeBox);
-    chorusRate.init(*this, s, ParamIDs::chorusRate, "RATE", false, false); chorusDepth.init(*this, s, ParamIDs::chorusDepth, "DEPTH", false, false); chorusMix.init(*this, s, ParamIDs::chorusMix, "MIX", false, false);
+    chorusButton.setTooltip("Mod FX: Chorus I / II and three-voice Ensemble (BBD-style), Flanger (short swept delay with feedback) and Phaser (6-stage, swept 200 Hz - 4 kHz). FDBK applies to flanger / phaser.");
+    addAndMakeVisible(chorusModeBox); chorusModeBox.addItemList({ "Chorus I", "Chorus II", "Ensemble", "Flanger", "Phaser" }, 1); chorusModeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(s, ParamIDs::chorusMode, chorusModeBox);
+    chorusRate.init(*this, s, ParamIDs::chorusRate, "RATE", false, false); chorusDepth.init(*this, s, ParamIDs::chorusDepth, "DEPTH", false, false); chorusMix.init(*this, s, ParamIDs::chorusMix, "MIX", false, false); chorusFb.init(*this, s, ParamIDs::chorusFb, "FDBK", false, false);
     vibrato.slider.setTooltip("Human vibrato: 5-6 Hz, a different rate per voice, eases in after the attack"); breath.slider.setTooltip("Breath: voice-shaped noise under the note (AIR adds some too)");
     spaceMix.init(*this, s, ParamIDs::spaceMix, "MIX", false, false); spacePre.init(*this, s, ParamIDs::spacePre, "PRE", false, false); spaceLow.init(*this, s, ParamIDs::spaceLow, "LO CUT", false, false);
 
@@ -107,7 +107,7 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
 
     allKnobs = { &cutoff, &res, &envAmt, &keyTrack, &drive, &spaceSize, &spaceDecay, &spaceDark, &duck, &duckRel, &glide, &drift, &volume,
                  &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
-                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ, &vibrato, &breath, &evolve, &chorusRate, &chorusDepth, &chorusMix };
+                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ, &vibrato, &breath, &evolve, &chorusRate, &chorusDepth, &chorusMix, &chorusFb };
     for (int o = 0; o < 2; ++o) for (auto* k : { &osc[o].position, &osc[o].level, &osc[o].octave, &osc[o].semis, &osc[o].fine, &osc[o].unison, &osc[o].spread, &osc[o].width }) allKnobs.push_back(k);
     for (int i = 0; i < 4; ++i) { allKnobs.push_back(&ampK[i]); allKnobs.push_back(&modK[i]); }
     for (int i = 0; i < 8; ++i) allKnobs.push_back(&macro[i]);
@@ -142,7 +142,7 @@ void NebulaAudioProcessorEditor::setPage(int p)
     for (auto* k : { &spaceSize, &spaceDecay, &spaceDark }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
     for (int i = 0; i < 4; ++i) { ampK[i].slider.setVisible(voice); ampK[i].label.setVisible(voice); modK[i].slider.setVisible(voice); modK[i].label.setVisible(voice); eqSel[i].setVisible(! voice); }
     for (auto* k : { &eqFreq, &eqGain, &eqQ, &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
-                     &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &chorusRate, &chorusDepth, &chorusMix }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
+                     &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &chorusRate, &chorusDepth, &chorusMix, &chorusFb }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
     for (auto* c : std::initializer_list<juce::Component*>{ &eqOnButton, &eqTypeBox, &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton, &echoDivBox, &satTypeBox, &spaceButton, &shimmerButton, &chorusButton, &chorusModeBox })
         c->setVisible(! voice);
     voiceTab.setToggleState(voice, juce::dontSendNotification); fxTab.setToggleState(! voice, juce::dontSendNotification);
@@ -264,7 +264,7 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
     else
     {
         zwui::drawCard(g, juce::Rectangle<float>(22 * s, 436 * s, 320 * s, 256 * s), "EQ", lnf.accent, lnf.accent2, s);
-        zwui::drawCard(g, juce::Rectangle<float>(352 * s, 436 * s, 666 * s, 256 * s), "CHAIN   EQ  ->  SATURATE  ->  GLUE  ->  CHORUS  ->  ECHO  ->  SPACE", lnf.accent2, lnf.accent, s);
+        zwui::drawCard(g, juce::Rectangle<float>(352 * s, 436 * s, 666 * s, 256 * s), "CHAIN   EQ  ->  SATURATE  ->  GLUE  ->  MOD FX  ->  ECHO  ->  SPACE", lnf.accent2, lnf.accent, s);
     }
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 704 * s, 996 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 886 * s, 996 * s, 96 * s), "MACROS", lnf.accent, lnf.accent2, s);
@@ -352,7 +352,7 @@ void NebulaAudioProcessorEditor::resized()
         satButton.setBounds(S(x), S(468), S(96), S(22)); satTypeBox.setBounds(S(x), S(496), S(122), S(22));
         x = mod(1, { &glueDepth, &glueTime, &glueMix }, { &glueUp, &glueDown, &glueOut });
         glueButton.setBounds(S(x), S(468), S(70), S(22));
-        x = mod(2, { &chorusRate, &chorusDepth, &chorusMix }, {});
+        x = mod(2, { &chorusRate, &chorusDepth, &chorusMix }, { &chorusFb });
         chorusButton.setBounds(S(x), S(468), S(84), S(22)); chorusModeBox.setBounds(S(x), S(496), S(122), S(22));
         x = mod(3, { &echoTime, &echoFb, &echoMix }, { &echoTone, &echoWobble, &echoWidth });
         echoButton.setBounds(S(x), S(468), S(60), S(22)); echoSyncButton.setBounds(S(x + 64), S(468), S(44), S(22)); echoDivBox.setBounds(S(x), S(496), S(122), S(22));

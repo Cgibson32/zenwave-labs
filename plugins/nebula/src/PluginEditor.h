@@ -35,9 +35,9 @@ private:
     zwui::Knob spaceSize, spaceDecay, spaceDark, duck, duckRel, glide, drift, volume;
     zwui::Knob macro[8];
     zwui::Knob vibrato, breath, evolve;
-    juce::ToggleButton chorusButton { "CHORUS" }; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> chorusAttach;
+    juce::ToggleButton chorusButton { "MOD FX" }; std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> chorusAttach;
     juce::ComboBox chorusModeBox; std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> chorusModeAttach;
-    zwui::Knob chorusRate, chorusDepth, chorusMix;
+    zwui::Knob chorusRate, chorusDepth, chorusMix, chorusFb;
     // ---- FX page ----
     int page = 0;                                   // 0 = VOICE, 1 = FX
     juce::TextButton voiceTab { "VOICE" }, fxTab { "FX" };

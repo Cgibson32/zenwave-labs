@@ -428,7 +428,7 @@ struct FxParams
     EqNode eq[4];
     bool satOn = false; int satType = 0; float satDrive = 0.3f, satTone = 0.0f, satBias = 0.0f, satLowHz = 20.0f, satOutDb = 0.0f, satMix = 1.0f;
     bool glueOn = false; float glueDepth = 0.5f, glueTime = 0.5f, glueUp = 1.0f, glueDown = 1.0f, glueMix = 1.0f, glueOutDb = 0.0f;
-    bool chorusOn = false; int chorusMode = 2; float chorusRate = 0.5f, chorusDepth = 0.5f, chorusMix = 0.5f;   // mode: 0 Chorus I, 1 Chorus II, 2 Ensemble
+    bool chorusOn = false; int chorusMode = 2; float chorusRate = 0.5f, chorusDepth = 0.5f, chorusMix = 0.5f, chorusFb = 0.0f;   // mode: 0 Chorus I, 1 Chorus II, 2 Ensemble, 3 Flanger, 4 Phaser
     bool echoOn = false; float echoTimeMs = 375.0f; float echoFeedback = 0.4f, echoMix = 0.25f, echoTone = 0.5f, echoWobble = 0.0f, echoWidth = 0.66f; bool echoPingPong = true;
 };
 
@@ -464,6 +464,7 @@ public:
         for (int c = 0; c < 2; ++c) { chDl[c].prepare(sr, 0.06f); chTone[c].setSampleRate(sr); chTone[c].setLowpass(9000.0f); }
         for (int i = 0; i < 3; ++i) { chLfo[i].setSampleRate(sr); chLfo[i].setShape(zw::LFO::Shape::Sine); chLfo[i].reset(i / 3.0f); }
         smChMix.setSampleRate(sr); smChMix.setTime(40.0f); smChMix.reset(0.0f);
+        for (int c = 0; c < 2; ++c) { flFb[c] = 0.0f; phFb[c] = 0.0f; for (auto& a : ph1[c]) a = 0.0f; for (auto& a : ph1y[c]) a = 0.0f; }
         for (auto* s : { &smSatMix, &smGlueMix, &smEchoMix, &smEchoFb, &smEchoTime, &smSatDrive, &smSatOut, &smGlueOut, &smCrush }) { s->setSampleRate(sr); s->setTime(30.0f); }
         smEchoTime.setTime(80.0f);
         set(params); smEchoTime.reset(float(params.echoTimeMs * 0.001 * sr)); smEchoMix.reset(0.0f); smSatMix.reset(0.0f); smGlueMix.reset(0.0f); smSatOut.reset(1.0f); smGlueOut.reset(1.0f);
@@ -478,7 +479,7 @@ public:
         smCrush.setTarget(p.satType == 4 ? 1.0f : 0.0f);
         smGlueMix.setTarget(p.glueOn ? p.glueMix : 0.0f); smGlueOut.setTarget(zw::dbToGain(p.glueOutDb)); glue.set(p.glueDepth, p.glueTime, 1.0f, 1.0f, true); glue.setBalance(p.glueUp, p.glueDown);
         smChMix.setTarget(p.chorusOn ? p.chorusMix : 0.0f);
-        { const float r = 0.08f + p.chorusRate * p.chorusRate * 2.5f; chLfo[0].setRate(r); chLfo[1].setRate(r * 1.31f); chLfo[2].setRate(r * 0.77f); }
+        { const float r = p.chorusMode >= 3 ? 0.03f + p.chorusRate * p.chorusRate * 1.5f : 0.08f + p.chorusRate * p.chorusRate * 2.5f; chLfo[0].setRate(r); chLfo[1].setRate(r * 1.31f); chLfo[2].setRate(r * 0.77f); }
         smEchoMix.setTarget(p.echoOn ? p.echoMix : 0.0f); smEchoFb.setTarget(zw::clampf(p.echoFeedback, 0.0f, 0.95f));
         smEchoTime.setTarget(float(zw::clampf(p.echoTimeMs, 10.0f, 2400.0f) * 0.001 * fs));
         for (auto& t : tone) t.setLowpass(zw::lerp(1500.0f, 14000.0f, p.echoTone));
@@ -526,13 +527,36 @@ public:
             // Chorus / Ensemble (BBD-style modulated delays; I = one voice, II = deeper/slower, Ensemble = three voices)
             {
                 const float m = smChMix.next();
-                chDl[0].write(chTone[0].process(l)); chDl[1].write(chTone[1].process(r));
+                chDl[0].write(chTone[0].process(l + flFb[0])); chDl[1].write(chTone[1].process(r + flFb[1]));
                 if (m > 0.0005f)
                 {
                     const float l0 = chLfo[0].next(), l1 = chLfo[1].next(), l2 = chLfo[2].next();
                     const float base = (params.chorusMode == 1 ? 11.0f : 7.0f) * 0.001f * float(fs), depth = params.chorusDepth * (params.chorusMode == 1 ? 4.5f : 3.0f) * 0.001f * float(fs);
                     float wl, wr;
-                    if (params.chorusMode == 2)
+                    if (params.chorusMode == 3)          // Flanger: 0.6 .. 6 ms, feedback, R sweeps opposite
+                    {
+                        const float fb = zw::clampf(params.chorusFb, -0.9f, 0.9f);
+                        const float dmin = 0.0006f * float(fs), dspan = 0.0055f * float(fs) * (0.2f + 0.8f * params.chorusDepth);
+                        const float dl0 = dmin + dspan * (0.5f + 0.5f * l0), dr0 = dmin + dspan * (0.5f - 0.5f * l0);
+                        wl = chDl[0].read(dl0); wr = chDl[1].read(dr0);
+                        flFb[0] = wl * fb; flFb[1] = wr * fb;          // fed into the next write below
+                    }
+                    else if (params.chorusMode == 4)     // Phaser: 6 first-order allpass stages, centre swept 200 Hz .. 4 kHz
+                    {
+                        const float fb = zw::clampf(params.chorusFb, -0.9f, 0.9f);
+                        float in[2] = { l + phFb[0], r + phFb[1] }, outv[2];
+                        for (int c = 0; c < 2; ++c)
+                        {
+                            const float lf = c == 0 ? l0 : l1;
+                            const float hz = 200.0f * std::pow(20.0f, 0.5f + 0.5f * lf * params.chorusDepth);
+                            const float tn = std::tan(3.14159265f * zw::clampf(hz, 40.0f, float(fs * 0.45)) / float(fs)); const float a = (tn - 1.0f) / (tn + 1.0f);
+                            float x = in[c];
+                            for (int st = 0; st < 6; ++st) { const float y = a * x + ph1[c][st] - a * ph1y[c][st]; ph1[c][st] = x; ph1y[c][st] = y; x = y; }
+                            outv[c] = x; phFb[c] = x * fb;
+                        }
+                        wl = outv[0]; wr = outv[1];
+                    }
+                    else if (params.chorusMode == 2)
                     {
                         wl = (chDl[0].read(base + depth * l0) + chDl[0].read(base * 1.6f + depth * l2) + chDl[1].read(base * 1.3f - depth * l1)) * 0.45f;
                         wr = (chDl[1].read(base - depth * l0) + chDl[1].read(base * 1.6f - depth * l2) + chDl[0].read(base * 1.3f + depth * l1)) * 0.45f;
@@ -540,7 +564,7 @@ public:
                     else { wl = chDl[0].read(base + depth * l0); wr = chDl[1].read(base - depth * l0); }
                     l = l * (1.0f - 0.5f * m) + wl * m; r = r * (1.0f - 0.5f * m) + wr * m;
                 }
-                else { chLfo[0].next(); chLfo[1].next(); chLfo[2].next(); }
+                else { chLfo[0].next(); chLfo[1].next(); chLfo[2].next(); flFb[0] = flFb[1] = 0.0f; phFb[0] = phFb[1] = 0.0f; }
             }
             // Echo (ping-pong, filtered feedback)
             {
@@ -565,6 +589,7 @@ private:
     zw::OttBand glue;
     zw::DelayLine dl[2]; zw::OnePole tone[2], hp[2], satDC[2], satLow[2]; zw::TiltEQ satTilt[2]; zw::Oversampler2x satOS[2]; zw::LFO wobble;
     zw::DelayLine chDl[2]; zw::OnePole chTone[2]; zw::LFO chLfo[3]; zw::Smoother smChMix;
+    float flFb[2] = { 0, 0 }, phFb[2] = { 0, 0 }, ph1[2][6] {}, ph1y[2][6] {};
     float crushHold[2] = { 0, 0 }; int crushCnt[2] = { 0, 0 };
     zw::Smoother smSatMix, smSatDrive, smSatOut, smCrush, smGlueMix, smGlueOut, smEchoMix, smEchoFb, smEchoTime;
 };

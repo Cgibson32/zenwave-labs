@@ -71,7 +71,7 @@ namespace NebulaManual
               { "GLUE", "A single-band Pulse compressor: upward and downward, adaptive thresholds. DEPTH is the amount, TIME scales attack and release. Pads stay even, plucks get dense. GR shows the live gain change.", "gluedepth" },
               { "UP / DOWN", "How much of the upward (lift quiet parts) and downward (tame loud parts) halves to apply. UP 0 = a classic compressor, DOWN 0 = pure upward expansion.", "glueup" },
               { "MIX", "Parallel compression blend.", "gluemix" }, { "OUT", "Make-up gain.", "glueout" },
-              { "CHORUS", "BBD-style chorus. Chorus I = one voice, Chorus II = deeper and slower, ENSEMBLE = three voices - the string-machine wash that makes pads dreamy. RATE, DEPTH, MIX.", "chorusdepth" },
+              { "MOD FX", "Chorus I = one BBD voice, Chorus II = deeper and slower, ENSEMBLE = three voices (the string-machine wash that makes pads dreamy), FLANGER = short swept delay with FDBK (jet / metallic, negative FDBK is hollow), PHASER = six-stage sweep 200 Hz - 4 kHz with FDBK. RATE, DEPTH, MIX.", "chorusdepth" },
               { "ECHO", "Synced ping-pong delay with a filtered, gently saturating feedback loop. SYNC + division or TIME in ms; FDBK, MIX, TONE (dark to bright repeats).", "echofb" },
               { "WOBBLE", "Tape wow on the delay time - repeats drift in pitch. A little is lush, a lot is seasick.", "echowobble" },
               { "WIDTH", "Stereo width of the repeats: left = mono, right = extra wide.", "echowidth" },

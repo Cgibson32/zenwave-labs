@@ -177,7 +177,7 @@ namespace Presets
         for (int i = 0; i < nebula::kCarveBands; ++i) setParam(apvts, ParamIDs::carveBandOn(i), 0.0f);
         setParam(apvts, ParamIDs::duck, 0.0f); setParam(apvts, ParamIDs::duckRelease, 250.0f);
         setParam(apvts, ParamIDs::vibrato, 0.0f); setParam(apvts, ParamIDs::breath, 0.0f); setParam(apvts, ParamIDs::evolve, 0.0f);
-        setParam(apvts, ParamIDs::chorusOn, 0.0f); setParam(apvts, ParamIDs::chorusMode, 2.0f); setParam(apvts, ParamIDs::chorusRate, 0.4f); setParam(apvts, ParamIDs::chorusDepth, 0.5f); setParam(apvts, ParamIDs::chorusMix, 0.5f);
+        setParam(apvts, ParamIDs::chorusOn, 0.0f); setParam(apvts, ParamIDs::chorusMode, 2.0f); setParam(apvts, ParamIDs::chorusRate, 0.4f); setParam(apvts, ParamIDs::chorusDepth, 0.5f); setParam(apvts, ParamIDs::chorusMix, 0.5f); setParam(apvts, ParamIDs::chorusFb, 0.0f);
         // FX page defaults
         const float eqDef[4] = { 120.0f, 500.0f, 2500.0f, 9000.0f }; const int eqTypeDef[4] = { 1, 0, 0, 2 };
         for (int i = 0; i < 4; ++i) { setParam(apvts, ParamIDs::eqOn(i), 0.0f); setParam(apvts, ParamIDs::eqType(i), float(eqTypeDef[i])); setParam(apvts, ParamIDs::eqFreq(i), eqDef[i]); setParam(apvts, ParamIDs::eqGain(i), 0.0f); setParam(apvts, ParamIDs::eqQ(i), 1.0f); }
@@ -243,14 +243,14 @@ namespace Presets
         if (n == "Heaven Choir")       { setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 9.0f); setParam(apvts, ParamIDs::echoFb, 0.35f); setParam(apvts, ParamIDs::echoMix, 0.08f); setParam(apvts, ParamIDs::echoTone, 0.25f); }
         if (n == "Celestial Ooh")      { heavenly(0.2f, 0.3f, 0.7f, true, -4.0f, 0.5f); setParam(apvts, ParamIDs::spacePre, 80.0f); }
         if (n == "Ethereal Soprano")   { heavenly(0.35f, 0.3f, 0.5f, true, -2.5f, 0.35f); }
-        if (n == "Other Planet")       { heavenly(0.15f, 0.2f, 0.9f, true, -3.0f, 0.55f); band(0, 7.0f, 0.5f, 1.8f); zwui::setModSlot(apvts, 3, 2, 27, 0.2f);
+        if (n == "Other Planet")       { heavenly(0.15f, 0.2f, 0.9f, true, -3.0f, 0.55f); setParam(apvts, ParamIDs::chorusMode, 4.0f); setParam(apvts, ParamIDs::chorusRate, 0.15f); setParam(apvts, ParamIDs::chorusDepth, 0.6f); setParam(apvts, ParamIDs::chorusFb, 0.35f); setParam(apvts, ParamIDs::chorusMix, 0.4f); band(0, 7.0f, 0.5f, 1.8f); zwui::setModSlot(apvts, 3, 2, 27, 0.2f);
                                         setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 11.0f); setParam(apvts, ParamIDs::echoFb, 0.5f); setParam(apvts, ParamIDs::echoMix, 0.12f); setParam(apvts, ParamIDs::echoTone, 0.3f); setParam(apvts, ParamIDs::echoWobble, 0.3f); }
         if (n == "Dream Bed")          { heavenly(0.15f, 0.2f, 0.75f, false, -4.0f, 0.5f); setParam(apvts, ParamIDs::spaceLow, 140.0f); }
         if (n == "Mezzo Halo")         { heavenly(0.3f, 0.25f, 0.6f, true, -3.0f, 0.4f); }
         if (n == "Breath of Light")    { heavenly(0.2f, 0.5f, 0.8f, true, -2.0f, 0.5f); setParam(apvts, ParamIDs::spacePre, 90.0f); setParam(apvts, ParamIDs::spaceLow, 200.0f); }
         if (n == "Soul Choir")         { heavenly(0.3f, 0.2f, 0.4f, false, -3.0f, 0.3f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.15f); setParam(apvts, ParamIDs::satBias, 0.2f); setParam(apvts, ParamIDs::satMix, 0.35f); }
         if (n == "Vowel Drift")        { heavenly(0.25f, 0.25f, 0.6f, true, -3.0f, 0.45f); zwui::setLfo(apvts, 0, 1, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.45f); zwui::setModSlot(apvts, 2, 1, 2, -0.45f); }
-        if (n == "Afterglow")          { heavenly(0.2f, 0.3f, 0.7f, true, -4.0f, 0.5f); setParam(apvts, ParamIDs::spacePre, 100.0f); setParam(apvts, ParamIDs::spaceDecay, 0.98f); }
+        if (n == "Afterglow")          { heavenly(0.2f, 0.3f, 0.7f, true, -4.0f, 0.5f); setParam(apvts, ParamIDs::chorusMode, 3.0f); setParam(apvts, ParamIDs::chorusRate, 0.1f); setParam(apvts, ParamIDs::chorusDepth, 0.5f); setParam(apvts, ParamIDs::chorusFb, 0.3f); setParam(apvts, ParamIDs::chorusMix, 0.3f); setParam(apvts, ParamIDs::spacePre, 100.0f); setParam(apvts, ParamIDs::spaceDecay, 0.98f); }
         if (n == "Ahh Choir")          { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.25f); setParam(apvts, ParamIDs::spacePre, 40.0f); setParam(apvts, ParamIDs::spaceLow, 150.0f);
                                         setParam(apvts, ParamIDs::eqOn(1), 1.0f); setParam(apvts, ParamIDs::eqFreq(1), 320.0f); setParam(apvts, ParamIDs::eqGain(1), -2.0f); }
         if (n == "Ooh Choir")          { zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.35f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 7, 0.2f); setParam(apvts, ParamIDs::spacePre, 50.0f); setParam(apvts, ParamIDs::spaceLow, 140.0f); }
