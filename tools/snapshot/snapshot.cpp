@@ -9,16 +9,16 @@ int main(int argc, char** argv)
     // "wav:<path>" as the 4th argument: render an audition of the preset (synths: a held chord + release) and exit
     if (argc > 3 && juce::String(argv[3]).startsWith("wav:"))
     {
-        const double sr = 48000.0; const int blockN = 512; const int holdBlocks = int(sr * 5.0 / blockN), tailBlocks = int(sr * 4.0 / blockN);
+        const double sr = 48000.0; const int blockN = 512; const int holdBlocks = int(sr * 10.0 / blockN), tailBlocks = int(sr * 6.0 / blockN);
         juce::AudioBuffer<float> out(2, (holdBlocks + tailBlocks) * blockN); out.clear();
         juce::AudioBuffer<float> b(2, blockN); juce::MidiBuffer mb;
         const bool synth = proc->acceptsMidi();
-        if (synth) { for (int n : { 48, 55, 60, 64 }) mb.addEvent(juce::MidiMessage::noteOn(1, n, 0.75f), 0); }
+        if (synth) { for (int n : { 48, 55, 62, 64, 67 }) mb.addEvent(juce::MidiMessage::noteOn(1, n, 0.7f), 0); }
         for (int blk = 0; blk < holdBlocks + tailBlocks; ++blk)
         {
             b.clear();
             if (! synth) for (int i = 0; i < blockN; ++i) { const double t = (blk * blockN + i) / sr; const float v = 0.4f * std::sin(float(2 * M_PI * 110.0 * t)) * float(std::exp(-std::fmod(t, 0.5) * 5.0)); b.setSample(0, i, v); b.setSample(1, i, v); }
-            if (synth && blk == holdBlocks) for (int n : { 48, 55, 60, 64 }) mb.addEvent(juce::MidiMessage::noteOff(1, n), 0);
+            if (synth && blk == holdBlocks) for (int n : { 48, 55, 62, 64, 67 }) mb.addEvent(juce::MidiMessage::noteOff(1, n), 0);
             proc->processBlock(b, mb); mb.clear();
             for (int c = 0; c < 2; ++c) out.copyFrom(c, blk * blockN, b, c, 0, blockN);
         }

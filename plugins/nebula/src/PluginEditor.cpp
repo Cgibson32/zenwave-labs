@@ -81,8 +81,13 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     glueDepth.init(*this, s, ParamIDs::glueDepth, "DEPTH", false, false); glueTime.init(*this, s, ParamIDs::glueTime, "TIME", false, false); glueMix.init(*this, s, ParamIDs::glueMix, "MIX", false, false);
     glueUp.init(*this, s, ParamIDs::glueUp, "UP", false, false); glueDown.init(*this, s, ParamIDs::glueDown, "DOWN", false, false); glueOut.init(*this, s, ParamIDs::glueOut, "OUT", false, false);
     echoTime.init(*this, s, ParamIDs::echoTime, "TIME", false, false); echoFb.init(*this, s, ParamIDs::echoFb, "FDBK", false, false); echoMix.init(*this, s, ParamIDs::echoMix, "MIX", false, false);
-    echoTone.init(*this, s, ParamIDs::echoTone, "TONE", false, false); echoWobble.init(*this, s, ParamIDs::echoWobble, "WOBBLE", false, false); echoWidth.init(*this, s, ParamIDs::echoWidth, "WIDTH", false, false);
-    vibrato.init(*this, s, ParamIDs::vibrato, "VIBRATO", false, false); breath.init(*this, s, ParamIDs::breath, "BREATH", false, false);
+    echoTone.init(*this, s, ParamIDs::echoTone, "TONE", false, false); echoWobble.init(*this, s, ParamIDs::echoWobble, "WOW", false, false); echoWidth.init(*this, s, ParamIDs::echoWidth, "WIDTH", false, false);
+    vibrato.init(*this, s, ParamIDs::vibrato, "VIBRATO", false, false); breath.init(*this, s, ParamIDs::breath, "BREATH", false, false); evolve.init(*this, s, ParamIDs::evolve, "EVOLVE", false, false);
+    evolve.slider.setTooltip("Evolve: every note drifts its own position, filter, pan and level on slow clocks no two notes share. The pad never sits still. MOVEMENT adds some too.");
+    addAndMakeVisible(chorusButton); chorusAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(s, ParamIDs::chorusOn, chorusButton);
+    chorusButton.setTooltip("Chorus / Ensemble: BBD-style modulated delays. Ensemble is three voices - the classic string-machine / dream-pad wash");
+    addAndMakeVisible(chorusModeBox); chorusModeBox.addItemList({ "Chorus I", "Chorus II", "Ensemble" }, 1); chorusModeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(s, ParamIDs::chorusMode, chorusModeBox);
+    chorusRate.init(*this, s, ParamIDs::chorusRate, "RATE", false, false); chorusDepth.init(*this, s, ParamIDs::chorusDepth, "DEPTH", false, false); chorusMix.init(*this, s, ParamIDs::chorusMix, "MIX", false, false);
     vibrato.slider.setTooltip("Human vibrato: 5-6 Hz, a different rate per voice, eases in after the attack"); breath.slider.setTooltip("Breath: voice-shaped noise under the note (AIR adds some too)");
     spaceMix.init(*this, s, ParamIDs::spaceMix, "MIX", false, false); spacePre.init(*this, s, ParamIDs::spacePre, "PRE", false, false); spaceLow.init(*this, s, ParamIDs::spaceLow, "LO CUT", false, false);
 
@@ -102,7 +107,7 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
 
     allKnobs = { &cutoff, &res, &envAmt, &keyTrack, &drive, &spaceSize, &spaceDecay, &spaceDark, &duck, &duckRel, &glide, &drift, &volume,
                  &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
-                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ, &vibrato, &breath };
+                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ, &vibrato, &breath, &evolve, &chorusRate, &chorusDepth, &chorusMix };
     for (int o = 0; o < 2; ++o) for (auto* k : { &osc[o].position, &osc[o].level, &osc[o].octave, &osc[o].semis, &osc[o].fine, &osc[o].unison, &osc[o].spread, &osc[o].width }) allKnobs.push_back(k);
     for (int i = 0; i < 4; ++i) { allKnobs.push_back(&ampK[i]); allKnobs.push_back(&modK[i]); }
     for (int i = 0; i < 8; ++i) allKnobs.push_back(&macro[i]);
@@ -132,13 +137,13 @@ void NebulaAudioProcessorEditor::setPage(int p)
     const bool voice = p == 0;
     for (auto* c : std::initializer_list<juce::Component*>{ &carveButton, &cutoff.slider, &cutoff.label, &res.slider, &res.label, &envAmt.slider, &envAmt.label, &keyTrack.slider, &keyTrack.label, &drive.slider, &drive.label, &filterModeBox,
                                                             &duck.slider, &duck.label, &duckRel.slider, &duckRel.label,
-                                                            &glide.slider, &glide.label, &drift.slider, &drift.label, &volume.slider, &volume.label, &vibrato.slider, &vibrato.label, &breath.slider, &breath.label })
+                                                            &glide.slider, &glide.label, &drift.slider, &drift.label, &volume.slider, &volume.label, &vibrato.slider, &vibrato.label, &breath.slider, &breath.label, &evolve.slider, &evolve.label })
         c->setVisible(voice);
     for (auto* k : { &spaceSize, &spaceDecay, &spaceDark }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
     for (int i = 0; i < 4; ++i) { ampK[i].slider.setVisible(voice); ampK[i].label.setVisible(voice); modK[i].slider.setVisible(voice); modK[i].label.setVisible(voice); eqSel[i].setVisible(! voice); }
     for (auto* k : { &eqFreq, &eqGain, &eqQ, &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
-                     &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
-    for (auto* c : std::initializer_list<juce::Component*>{ &eqOnButton, &eqTypeBox, &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton, &echoDivBox, &satTypeBox, &spaceButton, &shimmerButton })
+                     &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &chorusRate, &chorusDepth, &chorusMix }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
+    for (auto* c : std::initializer_list<juce::Component*>{ &eqOnButton, &eqTypeBox, &satButton, &glueButton, &echoButton, &echoSyncButton, &echoPPButton, &echoDivBox, &satTypeBox, &spaceButton, &shimmerButton, &chorusButton, &chorusModeBox })
         c->setVisible(! voice);
     voiceTab.setToggleState(voice, juce::dontSendNotification); fxTab.setToggleState(! voice, juce::dontSendNotification);
     repaint();
@@ -258,8 +263,8 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
     }
     else
     {
-        zwui::drawCard(g, juce::Rectangle<float>(22 * s, 436 * s, 380 * s, 256 * s), "EQ", lnf.accent, lnf.accent2, s);
-        zwui::drawCard(g, juce::Rectangle<float>(412 * s, 436 * s, 606 * s, 256 * s), "CHAIN   EQ  ->  SATURATE  ->  GLUE  ->  ECHO  ->  SPACE", lnf.accent2, lnf.accent, s);
+        zwui::drawCard(g, juce::Rectangle<float>(22 * s, 436 * s, 320 * s, 256 * s), "EQ", lnf.accent, lnf.accent2, s);
+        zwui::drawCard(g, juce::Rectangle<float>(352 * s, 436 * s, 666 * s, 256 * s), "CHAIN   EQ  ->  SATURATE  ->  GLUE  ->  CHORUS  ->  ECHO  ->  SPACE", lnf.accent2, lnf.accent, s);
     }
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 704 * s, 996 * s, 170 * s), "MOTION", lnf.accent2, lnf.accent, s);
     zwui::drawCard(g, juce::Rectangle<float>(22 * s, 886 * s, 996 * s, 96 * s), "MACROS", lnf.accent, lnf.accent2, s);
@@ -271,8 +276,8 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
         g.drawText("MOD", juce::Rectangle<float>(784 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
         g.drawText(juce::String("DUCK (SC)") + (processor.sidechainPresent.load() ? "" : "  -  no input"), juce::Rectangle<float>(548 * s, 566 * s, 140 * s, 12 * s), juce::Justification::centredLeft);
         g.drawText("VOICE  -  HUMAN", juce::Rectangle<float>(708 * s, 566 * s, 120 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText("OUT", juce::Rectangle<float>(936 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(774 * s), 452 * s, 552 * s); g.drawVerticalLine(int(698 * s), 566 * s, 684 * s); g.drawVerticalLine(int(926 * s), 566 * s, 684 * s);
+        g.drawText("OUT", juce::Rectangle<float>(956 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
+        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(774 * s), 452 * s, 552 * s); g.drawVerticalLine(int(696 * s), 566 * s, 684 * s); g.drawVerticalLine(int(948 * s), 566 * s, 684 * s);
         // duck meter
         { const float d = processor.duckVis.load(); g.setColour(zwui::Palette::dim.withAlpha(0.3f)); g.fillRoundedRectangle(548 * s, 666 * s, 136 * s, 4 * s, 2 * s); g.setColour(lnf.accent2); g.fillRoundedRectangle(548 * s, 666 * s, 136 * s * juce::jlimit(0.0f, 1.0f, d), 4 * s, 2 * s); }
     }
@@ -292,14 +297,14 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
             g.setColour(zwui::Palette::bg); g.setFont(juce::Font(juce::FontOptions(8.0f, juce::Font::bold))); g.drawText(juce::String(i + 1), int(c.x) - 6, int(c.y) - 6, 12, 12, juce::Justification::centred);
         }
         g.setFont(juce::Font(juce::FontOptions(8.5f * s, juce::Font::bold))); g.setColour(lnf.accentHi);
-        g.drawText("NODE " + juce::String(selectedEq + 1), juce::Rectangle<float>(222 * s, 452 * s, 100 * s, 12 * s), juce::Justification::centredLeft);
-        g.setColour(zwui::Palette::dim); g.drawText("click the display to place / drag nodes", juce::Rectangle<float>(40 * s, 452 * s, 180 * s, 12 * s), juce::Justification::centredLeft);
+        g.drawText("NODE " + juce::String(selectedEq + 1), juce::Rectangle<float>(250 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
+        g.setColour(zwui::Palette::dim); g.drawText("click the display to place / drag nodes", juce::Rectangle<float>(40 * s, 452 * s, 200 * s, 12 * s), juce::Justification::centredLeft);
         // chain readouts
         g.setColour(zwui::Palette::dim); g.setFont(juce::Font(juce::FontOptions(8.0f * s, juce::Font::bold)));
         const float gr = processor.glueGr();
-        g.drawText(glueButton.getToggleState() ? "GR " + juce::String(gr > 0 ? "+" : "") + juce::String(gr, 1) + " dB" : juce::String("GR  --"), juce::Rectangle<float>(578 * s, 668 * s, 120 * s, 10 * s), juce::Justification::centredLeft);
-        g.drawText("stereo width follows the WIDTH macro", juce::Rectangle<float>(874 * s, 668 * s, 140 * s, 10 * s), juce::Justification::centredLeft);
-        g.setColour(juce::Colours::white.withAlpha(0.06f)); for (int x : { 570, 718, 866 }) g.drawVerticalLine(int(x * s), 452 * s, 684 * s);
+        g.drawText(glueButton.getToggleState() ? "GR " + juce::String(gr > 0 ? "+" : "") + juce::String(gr, 1) + " dB" : juce::String("GR  --"), juce::Rectangle<float>(503 * s, 668 * s, 120 * s, 10 * s), juce::Justification::centredLeft);
+        g.drawText("width: WIDTH macro", juce::Rectangle<float>(902 * s, 668 * s, 120 * s, 10 * s), juce::Justification::centredLeft);
+        g.setColour(juce::Colours::white.withAlpha(0.06f)); for (int x : { 496, 629, 762, 895 }) g.drawVerticalLine(int(x * s), 452 * s, 684 * s);
     }
     zwui::drawOrbit(g, { 520 * s, 42 * s }, 24 * s, processor.motion, lnf.accent, lnf.accent2);
 }
@@ -330,28 +335,30 @@ void NebulaAudioProcessorEditor::resized()
         u.width.layout (x0 + S(168), S(306), S(72), S(96), S(12));
     }
     voiceTab.setBounds(S(846), S(428), S(70), S(18)); fxTab.setBounds(S(922), S(428), S(50), S(18));
-    eqDisplay = juce::Rectangle<int>(S(40), S(468), S(342), S(140));
+    eqDisplay = juce::Rectangle<int>(S(40), S(468), S(262), S(140));
     for (int i = 0; i < 4; ++i) eqSel[i].setBounds(S(40 + i * 30), S(618), S(26), S(22));
     eqOnButton.setBounds(S(166), S(617), S(24), S(24));
     eqTypeBox.setBounds(S(40), S(650), S(150), S(22));
-    eqFreq.layout(S(222), S(628), S(48), S(48), S(10)); eqGain.layout(S(276), S(628), S(48), S(48), S(10)); eqQ.layout(S(330), S(628), S(48), S(48), S(10));
+    eqFreq.layout(S(196), S(628), S(44), S(44), S(10)); eqGain.layout(S(244), S(628), S(44), S(44), S(10)); eqQ.layout(S(292), S(628), S(44), S(44), S(10));
     {
         auto mod = [&](int m, std::initializer_list<zwui::Knob*> row1, std::initializer_list<zwui::Knob*> row2)
         {
-            const int x0 = 430 + m * 148; int k = 0;
-            for (auto* kn : row1) { kn->layout(S(x0 + k * 46), S(540), S(44), S(44), S(10)); ++k; } k = 0;
-            for (auto* kn : row2) { kn->layout(S(x0 + k * 46), S(608), S(44), S(44), S(10)); ++k; }
+            const int x0 = 368 + m * 133; int k = 0;
+            for (auto* kn : row1) { kn->layout(S(x0 + k * 42), S(540), S(40), S(40), S(10)); ++k; } k = 0;
+            for (auto* kn : row2) { kn->layout(S(x0 + k * 42), S(608), S(40), S(40), S(10)); ++k; }
             return x0;
         };
         int x = mod(0, { &satDrive, &satTone, &satMix }, { &satBias, &satLow, &satOut });
-        satButton.setBounds(S(x), S(468), S(96), S(22)); satTypeBox.setBounds(S(x), S(496), S(136), S(22));
+        satButton.setBounds(S(x), S(468), S(96), S(22)); satTypeBox.setBounds(S(x), S(496), S(122), S(22));
         x = mod(1, { &glueDepth, &glueTime, &glueMix }, { &glueUp, &glueDown, &glueOut });
         glueButton.setBounds(S(x), S(468), S(70), S(22));
-        x = mod(2, { &echoTime, &echoFb, &echoMix }, { &echoTone, &echoWobble, &echoWidth });
-        echoButton.setBounds(S(x), S(468), S(60), S(22)); echoSyncButton.setBounds(S(x + 66), S(468), S(44), S(22)); echoDivBox.setBounds(S(x), S(496), S(136), S(22));
+        x = mod(2, { &chorusRate, &chorusDepth, &chorusMix }, {});
+        chorusButton.setBounds(S(x), S(468), S(84), S(22)); chorusModeBox.setBounds(S(x), S(496), S(122), S(22));
+        x = mod(3, { &echoTime, &echoFb, &echoMix }, { &echoTone, &echoWobble, &echoWidth });
+        echoButton.setBounds(S(x), S(468), S(60), S(22)); echoSyncButton.setBounds(S(x + 64), S(468), S(44), S(22)); echoDivBox.setBounds(S(x), S(496), S(122), S(22));
         echoPPButton.setBounds(S(x), S(664), S(96), S(18));
-        x = mod(3, { &spaceSize, &spaceDecay, &spaceMix }, { &spaceDark, &spacePre, &spaceLow });
-        spaceButton.setBounds(S(x), S(468), S(66), S(22)); shimmerButton.setBounds(S(x + 70), S(468), S(66), S(22));
+        x = mod(4, { &spaceSize, &spaceDecay, &spaceMix }, { &spaceDark, &spacePre, &spaceLow });
+        spaceButton.setBounds(S(x), S(468), S(60), S(22)); shimmerButton.setBounds(S(x + 62), S(468), S(62), S(22));
     }
     carveButton.setBounds(S(40), S(470), S(70), S(24));
     cutoff.layout(S(130), S(498), S(120), S(130), S(14));
@@ -360,9 +367,9 @@ void NebulaAudioProcessorEditor::resized()
     filterModeBox.setBounds(S(40), S(504), S(80), S(22));
     for (int i = 0; i < 4; ++i) { ampK[i].layout(S(548 + i * 56), S(480), S(54), S(54), S(10)); modK[i].layout(S(784 + i * 56), S(480), S(54), S(54), S(10)); }
     duck.layout(S(548), S(596), S(54), S(54), S(10)); duckRel.layout(S(612), S(596), S(54), S(54), S(10));
-    glide.layout(S(708), S(596), S(50), S(50), S(10)); drift.layout(S(762), S(596), S(50), S(50), S(10));
-    vibrato.layout(S(816), S(596), S(50), S(50), S(10)); breath.layout(S(870), S(596), S(50), S(50), S(10));
-    volume.layout(S(940), S(590), S(64), S(64), S(10));
+    glide.layout(S(704), S(598), S(46), S(46), S(10)); drift.layout(S(752), S(598), S(46), S(46), S(10));
+    vibrato.layout(S(800), S(598), S(46), S(46), S(10)); breath.layout(S(848), S(598), S(46), S(46), S(10)); evolve.layout(S(896), S(598), S(46), S(46), S(10));
+    volume.layout(S(954), S(592), S(56), S(56), S(10));
     modPanel.setBounds(S(22), S(704), S(996), S(170));
     modPanel.layoutScaled(996.0f * s / 836.0f);
     for (int i = 0; i < 8; ++i) macro[i].layout(S(118 + i * 110), S(908), S(96), S(68), S(12));

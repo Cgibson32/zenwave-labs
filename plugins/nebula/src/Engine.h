@@ -29,7 +29,7 @@ inline const juce::StringArray& tableNames()
 }
 inline const std::vector<std::pair<int, const char*>>& allTableSections()
 {
-    static const std::vector<std::pair<int, const char*>> s = [] { auto v = tableSections(); v.push_back({ kProceduralTables, "SAMPLED VOICE" }); return v; }();
+    static const std::vector<std::pair<int, const char*>> s = [] { auto v = tableSections(); v.push_back({ kProceduralTables, "REAL VOICE" }); return v; }();
     return s;
 }
 
@@ -213,6 +213,7 @@ struct VoiceParams
     float lfoToPosition = 0.0f;  // movement macro: LFO1 -> position
     float vibrato = 0.0f;        // human pitch motion: depth, 5-6 Hz, eases in after the attack, independent per voice
     float breath = 0.0f;         // breath noise layer shaped like a voice (formant bandpasses), follows the amp envelope
+    float evolve = 0.0f;         // per-voice slow motion: each note drifts its own position, filter, pan and level on its own clocks
 };
 
 class Adsr
@@ -265,6 +266,7 @@ public:
         amp.noteOn(); mod.noteOn(); released = false;
         if (silent) { for (auto& f : filt) f.reset(); posSm[0] = posSm[1] = -1.0f; vibAmt = 0.0f; vibPhase = rng.nextFloat(); }
         vibRate = 4.6f + rng.nextFloat() * 1.3f;                                    // every singer has their own vibrato
+        for (int k = 0; k < 4; ++k) { evRate[k] = (0.025f + rng.nextFloat() * 0.09f) / float(fs); if (silent) evPhase[k] = rng.nextFloat(); }
         breathF[0] = 900.0f + rng.nextFloat() * 300.0f; breathF[1] = 2300.0f + rng.nextFloat() * 600.0f;
     }
     void noteOff() { amp.noteOff(); mod.noteOff(); released = true; }
@@ -290,10 +292,14 @@ public:
             if ((age & 15) == 0)
             {
                 const float kt = (pitch - 60.0f) / 12.0f * p.keyTrack;
-                float hz = p.filterHz * std::pow(2.0f, kt + p.envAmt * 6.0f * m + pressure * 2.0f);
+                float hz = p.filterHz * std::pow(2.0f, kt + p.envAmt * 6.0f * m + pressure * 2.0f + ev[2] * 0.7f);
                 hz = zw::clampf(hz, 20.0f, float(fs * 0.45));
                 for (auto& f : filt) { f.setCutoff(hz); f.setResonance(0.5f + p.res * 9.5f); f.setMode(p.filterMode == 0 ? zw::SVF::Mode::Lowpass : p.filterMode == 1 ? zw::SVF::Mode::Highpass : zw::SVF::Mode::Bandpass); }
             }
+            // evolve: four slow sines per voice (position A, position B, filter, pan) at rates no two notes share
+            if (p.evolve > 0.0005f && (age & 31) == 0)
+                for (int k = 0; k < 4; ++k) { evPhase[k] += evRate[k] * 32.0f; if (evPhase[k] >= 1.0f) evPhase[k] -= 1.0f; ev[k] = std::sin(evPhase[k] * 6.2831853f) * p.evolve; }
+            else if (p.evolve <= 0.0005f) { ev[0] = ev[1] = ev[2] = ev[3] = 0.0f; }
             // human vibrato: eases in after the attack, a touch of rate wobble so it never sounds like an LFO
             float vib = 0.0f;
             if (p.vibrato > 0.0005f)
@@ -310,7 +316,7 @@ public:
                 const Table* tb = tables[o].get(); if (! tb) continue;
                 const float basePitch = pitch + osc.octave * 12.0f + osc.semis + osc.fine * 0.01f + bendSemis + vib;
                 const int uni = juce::jlimit(1, 8, osc.unison);
-                const float posTarget = zw::clampf(osc.position + p.lfoToPosition * 0.5f * lfoPos, 0.0f, 1.0f);
+                const float posTarget = zw::clampf(osc.position + p.lfoToPosition * 0.5f * lfoPos + ev[o] * 0.18f, 0.0f, 1.0f);
                 if (posSm[o] < 0.0f) posSm[o] = posTarget;
                 posSm[o] += (posTarget - posSm[o]) * posK;      // ~6 ms glide: modulated POSITION morphs, never steps
                 const float pos = posSm[o];
@@ -339,6 +345,12 @@ public:
                 }
             }
             sL *= 0.7f; sR *= 0.7f;
+            if (p.evolve > 0.0005f)   // slow stereo drift + gentle level swell per note
+            {
+                const float pan = ev[3] * 0.35f, lvl = 1.0f + 0.12f * ev[2];
+                const float gl = std::sqrt(0.5f * (1.0f - pan)) * 1.4142f * lvl, gr = std::sqrt(0.5f * (1.0f + pan)) * 1.4142f * lvl;
+                sL *= gl; sR *= gr;
+            }
             // breath: noise through two slowly wandering vocal-formant bandpasses, keyed to the note's loudness
             if (p.breath > 0.0005f)
             {
@@ -369,6 +381,7 @@ private:
     Adsr amp, mod; zw::SVF filt[2];
     float ph[2][8] {}, driftState[2][8] {}, driftTarget[2][8] {}; float driftK = 0.001f, posK = 0.003f, posSm[2] = { -1.0f, -1.0f };
     float vibAmt = 0.0f, vibPhase = 0.0f, vibRate = 5.2f, vibOnsetK = 0.0001f, breathF[2] = { 1000.0f, 2500.0f };
+    float evRate[4] = { 0, 0, 0, 0 }, evPhase[4] = { 0, 0.25f, 0.5f, 0.75f }, ev[4] = { 0, 0, 0, 0 };
     zw::SVF breathBp[2][2]; zw::OnePole breathLp[2];
     juce::Random rng;
 };
@@ -415,6 +428,7 @@ struct FxParams
     EqNode eq[4];
     bool satOn = false; int satType = 0; float satDrive = 0.3f, satTone = 0.0f, satBias = 0.0f, satLowHz = 20.0f, satOutDb = 0.0f, satMix = 1.0f;
     bool glueOn = false; float glueDepth = 0.5f, glueTime = 0.5f, glueUp = 1.0f, glueDown = 1.0f, glueMix = 1.0f, glueOutDb = 0.0f;
+    bool chorusOn = false; int chorusMode = 2; float chorusRate = 0.5f, chorusDepth = 0.5f, chorusMix = 0.5f;   // mode: 0 Chorus I, 1 Chorus II, 2 Ensemble
     bool echoOn = false; float echoTimeMs = 375.0f; float echoFeedback = 0.4f, echoMix = 0.25f, echoTone = 0.5f, echoWobble = 0.0f, echoWidth = 0.66f; bool echoPingPong = true;
 };
 
@@ -447,6 +461,9 @@ public:
             satDC[c].setSampleRate(sr); satDC[c].setHighpass(10.0f); satLow[c].setSampleRate(sr); satLow[c].setLowpass(20.0f); satTilt[c].setSampleRate(sr); satTilt[c].reset(); satOS[c].reset();
         }
         wobble.setSampleRate(sr); wobble.setRate(0.23f); wobble.setShape(zw::LFO::Shape::Sine); wobble.reset(0.0f);
+        for (int c = 0; c < 2; ++c) { chDl[c].prepare(sr, 0.06f); chTone[c].setSampleRate(sr); chTone[c].setLowpass(9000.0f); }
+        for (int i = 0; i < 3; ++i) { chLfo[i].setSampleRate(sr); chLfo[i].setShape(zw::LFO::Shape::Sine); chLfo[i].reset(i / 3.0f); }
+        smChMix.setSampleRate(sr); smChMix.setTime(40.0f); smChMix.reset(0.0f);
         for (auto* s : { &smSatMix, &smGlueMix, &smEchoMix, &smEchoFb, &smEchoTime, &smSatDrive, &smSatOut, &smGlueOut, &smCrush }) { s->setSampleRate(sr); s->setTime(30.0f); }
         smEchoTime.setTime(80.0f);
         set(params); smEchoTime.reset(float(params.echoTimeMs * 0.001 * sr)); smEchoMix.reset(0.0f); smSatMix.reset(0.0f); smGlueMix.reset(0.0f); smSatOut.reset(1.0f); smGlueOut.reset(1.0f);
@@ -460,6 +477,8 @@ public:
         for (auto& t : satTilt) t.setTilt(p.satTone);
         smCrush.setTarget(p.satType == 4 ? 1.0f : 0.0f);
         smGlueMix.setTarget(p.glueOn ? p.glueMix : 0.0f); smGlueOut.setTarget(zw::dbToGain(p.glueOutDb)); glue.set(p.glueDepth, p.glueTime, 1.0f, 1.0f, true); glue.setBalance(p.glueUp, p.glueDown);
+        smChMix.setTarget(p.chorusOn ? p.chorusMix : 0.0f);
+        { const float r = 0.08f + p.chorusRate * p.chorusRate * 2.5f; chLfo[0].setRate(r); chLfo[1].setRate(r * 1.31f); chLfo[2].setRate(r * 0.77f); }
         smEchoMix.setTarget(p.echoOn ? p.echoMix : 0.0f); smEchoFb.setTarget(zw::clampf(p.echoFeedback, 0.0f, 0.95f));
         smEchoTime.setTarget(float(zw::clampf(p.echoTimeMs, 10.0f, 2400.0f) * 0.001 * fs));
         for (auto& t : tone) t.setLowpass(zw::lerp(1500.0f, 14000.0f, p.echoTone));
@@ -504,6 +523,25 @@ public:
             }
             // Glue (single-band OTT, adaptive, UP / DOWN balance, parallel MIX, OUT)
             { const float m = smGlueMix.next(), og = smGlueOut.next(); const float g = glue.process(l, r); if (m > 0.0005f) { const float gg = zw::lerp(1.0f, g * og, m); l *= gg; r *= gg; } glueGrVis = glue.gainReductionDb(); }
+            // Chorus / Ensemble (BBD-style modulated delays; I = one voice, II = deeper/slower, Ensemble = three voices)
+            {
+                const float m = smChMix.next();
+                chDl[0].write(chTone[0].process(l)); chDl[1].write(chTone[1].process(r));
+                if (m > 0.0005f)
+                {
+                    const float l0 = chLfo[0].next(), l1 = chLfo[1].next(), l2 = chLfo[2].next();
+                    const float base = (params.chorusMode == 1 ? 11.0f : 7.0f) * 0.001f * float(fs), depth = params.chorusDepth * (params.chorusMode == 1 ? 4.5f : 3.0f) * 0.001f * float(fs);
+                    float wl, wr;
+                    if (params.chorusMode == 2)
+                    {
+                        wl = (chDl[0].read(base + depth * l0) + chDl[0].read(base * 1.6f + depth * l2) + chDl[1].read(base * 1.3f - depth * l1)) * 0.45f;
+                        wr = (chDl[1].read(base - depth * l0) + chDl[1].read(base * 1.6f - depth * l2) + chDl[0].read(base * 1.3f + depth * l1)) * 0.45f;
+                    }
+                    else { wl = chDl[0].read(base + depth * l0); wr = chDl[1].read(base - depth * l0); }
+                    l = l * (1.0f - 0.5f * m) + wl * m; r = r * (1.0f - 0.5f * m) + wr * m;
+                }
+                else { chLfo[0].next(); chLfo[1].next(); chLfo[2].next(); }
+            }
             // Echo (ping-pong, filtered feedback)
             {
                 const float m = smEchoMix.next(), fb = smEchoFb.next();
@@ -526,6 +564,7 @@ private:
     Biquad eq[4]; bool eqOn[4] = { false, false, false, false };
     zw::OttBand glue;
     zw::DelayLine dl[2]; zw::OnePole tone[2], hp[2], satDC[2], satLow[2]; zw::TiltEQ satTilt[2]; zw::Oversampler2x satOS[2]; zw::LFO wobble;
+    zw::DelayLine chDl[2]; zw::OnePole chTone[2]; zw::LFO chLfo[3]; zw::Smoother smChMix;
     float crushHold[2] = { 0, 0 }; int crushCnt[2] = { 0, 0 };
     zw::Smoother smSatMix, smSatDrive, smSatOut, smCrush, smGlueMix, smGlueOut, smEchoMix, smEchoFb, smEchoTime;
 };

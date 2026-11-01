@@ -110,7 +110,7 @@ inline void setParamPlain(juce::AudioProcessorValueTreeState& apvts, const juce:
 class ModMatrix
 {
 public:
-    static constexpr int kMaxTargets = 32;
+    static constexpr int kMaxTargets = 64;
 
     void attach(juce::AudioProcessorValueTreeState& apvts, const std::vector<ModTarget>& targets)
     {

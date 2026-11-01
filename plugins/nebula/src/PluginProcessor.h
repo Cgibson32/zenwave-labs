@@ -37,7 +37,8 @@ namespace ParamIDs
     inline constexpr auto glueOn = "glueon", glueDepth = "gluedepth", glueTime = "gluetime", glueUp = "glueup", glueDown = "gluedown", glueMix = "gluemix", glueOut = "glueout";
     inline constexpr auto echoOn = "echoon", echoSync = "echosync", echoDiv = "echodiv", echoTime = "echotime", echoFb = "echofb", echoMix = "echomix", echoTone = "echotone", echoWobble = "echowobble", echoWidth = "echowidth", echoPP = "echopp";
     inline constexpr auto spaceOn = "spaceon", spacePre = "spacepre", spaceLow = "spacelow", spaceShimmer = "spaceshimmer";
-    inline constexpr auto vibrato = "vibrato", breath = "breath";
+    inline constexpr auto vibrato = "vibrato", breath = "breath", evolve = "evolve";
+    inline constexpr auto chorusOn = "choruson", chorusMode = "chorusmode", chorusRate = "chorusrate", chorusDepth = "chorusdepth", chorusMix = "chorusmix";
     inline constexpr auto duck = "duck";          // sidechain duck amount
     inline constexpr auto duckRelease = "duckrelease";
     inline constexpr auto volume = "volume";
@@ -46,7 +47,7 @@ namespace ParamIDs
 
 namespace ModT { enum { PosA, PosB, Cutoff, Res, Drive, LevelA, LevelB, SpaceMix, Warmth, Air, Movement, Grit, Width, Drift, Duck,
                         SatDrive, GlueDepth, EchoFb, EchoMix, EchoTone, Eq1Gain, Eq2Gain, Eq3Gain, Eq4Gain,
-                        SatTone, EchoWobble, SpaceSize, SpaceDecay, SpaceDark, Vibrato, Breath, Count }; }
+                        SatTone, EchoWobble, SpaceSize, SpaceDecay, SpaceDark, Vibrato, Breath, Evolve, ChorusDepth, ChorusMix, Count }; }
 inline const std::vector<zwui::ModTarget>& nebulaModTargets()
 {
     static const std::vector<zwui::ModTarget> t {
@@ -56,7 +57,7 @@ inline const std::vector<zwui::ModTarget>& nebulaModTargets()
         { ParamIDs::satDrive, "Sat Drive" }, { ParamIDs::glueDepth, "Glue Depth" }, { ParamIDs::echoFb, "Echo Feedback" }, { ParamIDs::echoMix, "Echo Mix" }, { ParamIDs::echoTone, "Echo Tone" },
         { "eq1gain", "EQ 1 Gain" }, { "eq2gain", "EQ 2 Gain" }, { "eq3gain", "EQ 3 Gain" }, { "eq4gain", "EQ 4 Gain" },
         { ParamIDs::satTone, "Sat Tone" }, { ParamIDs::echoWobble, "Echo Wobble" }, { ParamIDs::spaceSize, "Space Size" }, { ParamIDs::spaceDecay, "Space Decay" }, { ParamIDs::spaceDark, "Space Dark" },
-        { ParamIDs::vibrato, "Vibrato" }, { ParamIDs::breath, "Breath" } };
+        { ParamIDs::vibrato, "Vibrato" }, { ParamIDs::breath, "Breath" }, { ParamIDs::evolve, "Evolve" }, { ParamIDs::chorusDepth, "Chorus Depth" }, { ParamIDs::chorusMix, "Chorus Mix" } };
     return t;
 }
 
@@ -140,7 +141,7 @@ private:
     std::atomic<float>* pMacro[8]{}; std::atomic<float>* pVolume{}, * pPower{}, * pDuck{}, * pDuckRelease{};
     std::atomic<float>* pEqOn[4]{}, * pEqType[4]{}, * pEqFreq[4]{}, * pEqQ[4]{};
     std::atomic<float>* pSatOn{}, * pSatType{}, * pSatBias{}, * pSatLow{}, * pSatOut{}, * pSatMix{}, * pGlueOn{}, * pGlueTime{}, * pGlueUp{}, * pGlueDown{}, * pGlueMix{}, * pGlueOut{},
-                      * pEchoOn{}, * pEchoSync{}, * pEchoDiv{}, * pEchoTime{}, * pEchoWidth{}, * pEchoPP{}, * pSpaceOn{}, * pSpacePre{}, * pSpaceLow{}, * pSpaceShimmer{};
+                      * pEchoOn{}, * pEchoSync{}, * pEchoDiv{}, * pEchoTime{}, * pEchoWidth{}, * pEchoPP{}, * pSpaceOn{}, * pSpacePre{}, * pSpaceLow{}, * pSpaceShimmer{}, * pChorusOn{}, * pChorusMode{}, * pChorusRate{};
     zw::DelayLine spacePreDl[2]; zw::Smoother smSpacePre, smSpaceOn, smShimmer; zw::OctaveShifter shimmer[2]; zw::OnePole shimLP[2], shimHP[2]; float lastWetL = 0.0f, lastWetR = 0.0f, spaceWidthCur = 1.0f;
 public:
     float eqResponseDb(float hz) const { return fx.eqResponseDb(hz); }

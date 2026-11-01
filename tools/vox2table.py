@@ -131,6 +131,90 @@ def breath_envelope(x, sr, f0_track):
     return acc / (acc.max() + 1e-12)
 
 
+# ---------------------------------------------------------------- multi-note takes, vowel morphs, choirs ------
+def analyze(path, fmin=70.0, fmax=1400.0):
+    """all confident, locally stable harmonic snapshots of a take: list of (time_s, f0, amps at its own harmonics)"""
+    x, sr = read_wav(path)
+    x = x / (np.abs(x).max() + 1e-9)
+    win, hop = int(sr * 0.04), int(sr * 0.01)
+    rows = []
+    for i in range(0, len(x) - win, hop):
+        fr = x[i:i + win]
+        if math.sqrt(float(np.mean(fr * fr))) < 0.008:
+            continue
+        p, c = yin_pitch(fr, sr, fmin, fmax)
+        rows.append((i + win // 2, p, c))
+    snaps = []
+    for k in range(2, len(rows) - 2):
+        t, p, c = rows[k]
+        if c > 0.15:
+            continue
+        nb = [rows[j][1] for j in range(k - 2, k + 3)]
+        if max(abs(12 * math.log2(q / p)) for q in nb) > 0.6:      # pitch must be steady around the snapshot
+            continue
+        a = harmonic_snapshot(x, sr, t, p)
+        if a is not None:
+            snaps.append((t / sr, p, a))
+    return snaps, sr
+
+
+def to_ref(f0, amps, ref, partials=PARTIALS):
+    """re-sample a harmonic spectrum measured at f0 onto the harmonics of ref (log-amplitude vs frequency)"""
+    src_f = np.arange(1, len(amps) + 1) * f0
+    src_db = 20 * np.log10(np.maximum(amps, 1e-7))
+    tgt_f = np.arange(1, partials + 1) * ref
+    out = np.interp(tgt_f, src_f, src_db, left=src_db[0], right=-140.0)
+    return 10 ** (out / 20)
+
+
+def frames_from_snaps(snap_sets, ref, frames_per_set):
+    """snap_sets: list of snapshot lists (one per vowel/segment). Takes frames evenly in time from each set."""
+    frames = []
+    for snaps, nf in zip(snap_sets, frames_per_set):
+        if not snaps:
+            continue
+        pick = np.linspace(0, len(snaps) - 1, nf).round().astype(int)
+        for k in pick:
+            t, f0, a = snaps[k]
+            frames.append(to_ref(f0, a, ref))
+    return np.array(frames)
+
+
+def smooth_frames(frames, k=1):
+    out = frames.copy()
+    for f in range(len(frames)):
+        lo, hi = max(0, f - k), min(len(frames), f + k + 1)
+        out[f] = np.exp(np.log(frames[lo:hi] + 1e-7).mean(axis=0))
+    return out
+
+
+def table_from_vowel_set(paths, name, ref=None):
+    """one singer, several vowels -> POSITION morphs vowel to vowel; frames inside a vowel come from different
+    moments / notes of the take, so the morph breathes instead of stepping"""
+    sets = [analyze(p)[0] for p in paths]
+    all_f0 = [f0 for s in sets for (_, f0, _) in s]
+    ref = ref or float(np.exp(np.median(np.log(all_f0))))
+    per = [FRAMES // len(sets)] * len(sets)
+    for i in range(FRAMES - sum(per)):
+        per[i] += 1
+    frames = smooth_frames(frames_from_snaps(sets, ref, per), 1)
+    print(f'{name}: ref {ref:.1f} Hz, snapshots per vowel {[len(s) for s in sets]}')
+    return name, ref, frames, np.zeros(BREATH_BANDS)
+
+
+def table_from_choir(paths, name, ref=None):
+    """many singers, one vowel -> the section's average spectral envelope, evolving through the takes in time"""
+    sets = [analyze(p)[0] for p in paths]
+    all_f0 = [f0 for s in sets for (_, f0, _) in s]
+    ref = ref or float(np.exp(np.median(np.log(all_f0))))
+    per_singer = [frames_from_snaps([s], ref, [FRAMES]) for s in sets if s]
+    stack = np.array([f for f in per_singer if len(f) == FRAMES])
+    frames = np.exp(np.log(stack + 1e-7).mean(axis=0))          # geometric mean across singers = average envelope in dB
+    frames = smooth_frames(frames, 1)
+    print(f'{name}: ref {ref:.1f} Hz, {len(stack)} singers')
+    return name, ref, frames, np.zeros(BREATH_BANDS)
+
+
 def table_from_recording(path, name=None):
     x, sr = read_wav(path)
     x = x / (np.abs(x).max() + 1e-9)
@@ -238,6 +322,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--wav', nargs='*', default=[], help='sustained vocal recordings, one table each')
     ap.add_argument('--name', nargs='*', default=[], help='table names for --wav inputs (same order)')
+    ap.add_argument('--singer', action='append', nargs='+', metavar='ARG', default=[],
+                    help='NAME a.wav o.wav u.wav ... : one singer, vowel-morph table (repeatable)')
+    ap.add_argument('--choir', action='append', nargs='+', metavar='ARG', default=[],
+                    help='NAME f1_a.wav f2_a.wav ... : several singers, one vowel, averaged (repeatable)')
+    ap.add_argument('--ref', type=float, default=None, help='force reference pitch (Hz) for --singer/--choir tables')
     ap.add_argument('--cycles', help='folder of single-cycle WAVs')
     ap.add_argument('--cycles-prefix', default='Vox')
     ap.add_argument('--cycles-ref', type=float, default=220.0, help='assumed reference pitch of the cycles (Hz)')
@@ -247,6 +336,10 @@ def main():
     tables = []
     for i, w in enumerate(a.wav):
         tables.append(table_from_recording(w, a.name[i] if i < len(a.name) else None))
+    for grp in a.singer:
+        tables.append(table_from_vowel_set(grp[1:], grp[0], a.ref))
+    for grp in a.choir:
+        tables.append(table_from_choir(grp[1:], grp[0], a.ref))
     if a.cycles:
         tables += tables_from_cycles(a.cycles, a.cycles_prefix, ref_hz=a.cycles_ref, max_tables=a.max_tables)
     if not tables:
