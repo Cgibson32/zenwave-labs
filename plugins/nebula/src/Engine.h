@@ -15,12 +15,45 @@
 #include <cmath>
 #include <complex>
 #include "Tables.h"
+#include "SampledTables.h"
 
 namespace nebula {
 
-constexpr int kFrameLen = 1024, kFrames = 32, kMips = 6, kPartials = 384, kCarveBands = 8, kTables = 49;
+constexpr int kProceduralTables = 49;
+constexpr int kFrameLen = 1024, kFrames = 32, kMips = 6, kPartials = 384, kCarveBands = 8, kTables = kProceduralTables + kSampledTableCount;
 
-inline const juce::StringArray& tableNames() { return allTableNames(); }
+inline const juce::StringArray& tableNames()
+{
+    static const juce::StringArray n = [] { juce::StringArray a(allTableNames()); for (int i = 0; i < kSampledTableCount; ++i) a.add(kSampledTables[i].name); return a; }();
+    return n;
+}
+inline const std::vector<std::pair<int, const char*>>& allTableSections()
+{
+    static const std::vector<std::pair<int, const char*>> s = [] { auto v = tableSections(); v.push_back({ kProceduralTables, "SAMPLED VOICE" }); return v; }();
+    return s;
+}
+
+// Sampled table: harmonic spectrum per frame measured from a real recording at refHz. Re-sampled at the played
+// pitch so the singer's formants stay fixed in Hz; frames interpolate so POSITION replays the take's own motion.
+inline void sampledRecipe(const SampledTable& st, float pos, float* amp, float* phase, float f0Hint)
+{
+    const float f0 = f0Hint > 0.0f ? f0Hint : st.refHz;
+    const float fp = juce::jlimit(0.0f, 1.0f, pos) * (kSampledFrames - 1); const int fa = int(fp), fb = std::min(kSampledFrames - 1, fa + 1); const float ff = fp - fa;
+    auto dbAt = [&](int frame, float x)   // x: fractional harmonic index (1-based) in the stored spectrum
+    {
+        if (x >= float(kSampledPartials)) return -200.0f;
+        x = std::max(1.0f, x) - 1.0f; const int i = int(x); const int j = std::min(kSampledPartials - 1, i + 1); const float t = x - i;
+        const float a = (st.db[frame][i] - 255.0f) * 0.5f, b = (st.db[frame][j] - 255.0f) * 0.5f;
+        return a + (b - a) * t;
+    };
+    for (int h = 1; h <= kPartials; ++h)
+    {
+        const float x = h * f0 / st.refHz;
+        const float db = dbAt(fa, x) * (1.0f - ff) + dbAt(fb, x) * ff;
+        amp[h - 1] = db < -120.0f ? 0.0f : std::pow(10.0f, db / 20.0f);
+        phase[h - 1] = fixedPhase(h, 777);
+    }
+}
 
 // Harmonic recipe: amplitude + phase per partial for a given table and frame position (0..1)
 // f0Hint: the pitch (Hz) this frame will be played at, so formant-type tables keep their formants fixed in Hz. 0 = nominal.
@@ -29,6 +62,7 @@ inline void recipe(int table, float pos, float* amp, float* phase, juce::Random&
     for (int h = 0; h < kPartials; ++h) { amp[h] = 0.0f; phase[h] = 0.0f; }
     auto set = [&](int h, float a, float ph = 0.0f) { if (h >= 1 && h <= kPartials) { amp[h - 1] = a; phase[h - 1] = ph; } };
     const float t = pos;
+    if (table >= kProceduralTables) { sampledRecipe(kSampledTables[juce::jlimit(0, kSampledTableCount - 1, table - kProceduralTables)], t, amp, phase, f0Hint); return; }
     if (table >= kLegacyTables) { recipeEx(table, t, amp, phase, rng, f0Hint); return; }
     switch (table)
     {
@@ -177,6 +211,8 @@ struct VoiceParams
     float modA = 5.0f, modD = 300.0f, modS = 0.3f, modR = 300.0f;
     float glideMs = 0.0f;
     float lfoToPosition = 0.0f;  // movement macro: LFO1 -> position
+    float vibrato = 0.0f;        // human pitch motion: depth, 5-6 Hz, eases in after the attack, independent per voice
+    float breath = 0.0f;         // breath noise layer shaped like a voice (formant bandpasses), follows the amp envelope
 };
 
 class Adsr
@@ -215,6 +251,8 @@ public:
         rng.setSeedRandomly();
         driftK = 1.0f - std::exp(-1.0f / (0.6f * float(sr)));
         posK = 1.0f - std::exp(-1.0f / (0.006f * float(sr)));
+        for (int c = 0; c < 2; ++c) { for (auto& b : breathBp[c]) { b.setSampleRate(sr); b.setMode(zw::SVF::Mode::Bandpass); b.setResonance(2.2f); } breathLp[c].setSampleRate(sr); breathLp[c].setLowpass(7000.0f); }
+        vibOnsetK = 1.0f - std::exp(-1.0f / (0.9f * float(sr)));
     }
     void noteOn(int n, float vel, float glideFrom, float glideMs)
     {
@@ -225,7 +263,9 @@ public:
         const bool silent = amp.value() < 0.001f;
         for (int o = 0; o < 2; ++o) for (int u = 0; u < 8; ++u) { if (silent) ph[o][u] = rng.nextFloat(); driftState[o][u] = 0.0f; driftTarget[o][u] = rng.nextFloat() * 2.0f - 1.0f; }
         amp.noteOn(); mod.noteOn(); released = false;
-        if (silent) { for (auto& f : filt) f.reset(); posSm[0] = posSm[1] = -1.0f; }
+        if (silent) { for (auto& f : filt) f.reset(); posSm[0] = posSm[1] = -1.0f; vibAmt = 0.0f; vibPhase = rng.nextFloat(); }
+        vibRate = 4.6f + rng.nextFloat() * 1.3f;                                    // every singer has their own vibrato
+        breathF[0] = 900.0f + rng.nextFloat() * 300.0f; breathF[1] = 2300.0f + rng.nextFloat() * 600.0f;
     }
     void noteOff() { amp.noteOff(); mod.noteOff(); released = true; }
     bool active() const { return amp.active(); }
@@ -254,13 +294,21 @@ public:
                 hz = zw::clampf(hz, 20.0f, float(fs * 0.45));
                 for (auto& f : filt) { f.setCutoff(hz); f.setResonance(0.5f + p.res * 9.5f); f.setMode(p.filterMode == 0 ? zw::SVF::Mode::Lowpass : p.filterMode == 1 ? zw::SVF::Mode::Highpass : zw::SVF::Mode::Bandpass); }
             }
+            // human vibrato: eases in after the attack, a touch of rate wobble so it never sounds like an LFO
+            float vib = 0.0f;
+            if (p.vibrato > 0.0005f)
+            {
+                vibAmt += (1.0f - vibAmt) * vibOnsetK;
+                vibPhase += (vibRate * (1.0f + 0.08f * driftState[0][0])) / float(fs); if (vibPhase >= 1.0f) vibPhase -= 1.0f;
+                vib = std::sin(vibPhase * 6.2831853f) * p.vibrato * 0.45f * vibAmt;
+            }
             float sL = 0.0f, sR = 0.0f;
             for (int o = 0; o < 2; ++o)
             {
                 const auto& osc = p.osc[o];
                 if (! osc.on || osc.level <= 0.0005f) continue;
                 const Table* tb = tables[o].get(); if (! tb) continue;
-                const float basePitch = pitch + osc.octave * 12.0f + osc.semis + osc.fine * 0.01f + bendSemis;
+                const float basePitch = pitch + osc.octave * 12.0f + osc.semis + osc.fine * 0.01f + bendSemis + vib;
                 const int uni = juce::jlimit(1, 8, osc.unison);
                 const float posTarget = zw::clampf(osc.position + p.lfoToPosition * 0.5f * lfoPos, 0.0f, 1.0f);
                 if (posSm[o] < 0.0f) posSm[o] = posTarget;
@@ -291,6 +339,19 @@ public:
                 }
             }
             sL *= 0.7f; sR *= 0.7f;
+            // breath: noise through two slowly wandering vocal-formant bandpasses, keyed to the note's loudness
+            if (p.breath > 0.0005f)
+            {
+                if ((age & 255) == 0)
+                    for (int c = 0; c < 2; ++c) { const float w = 1.0f + 0.12f * driftState[1][c]; breathBp[c][0].setCutoff(breathF[0] * w); breathBp[c][1].setCutoff(breathF[1] / w); }
+                const float nz = rng.nextFloat() * 2.0f - 1.0f;
+                for (int c = 0; c < 2; ++c)
+                {
+                    const float nl = breathLp[c].process(nz);
+                    const float b = (breathBp[c][0].process(nl) + 0.7f * breathBp[c][1].process(nl) + 0.08f * nl) * p.breath * 0.35f;
+                    (c == 0 ? sL : sR) += b;
+                }
+            }
             // drive + filter
             if (p.drive > 0.001f) { const float g = 1.0f + p.drive * 6.0f; sL = zw::fastTanh(sL * g) / std::sqrt(g); sR = zw::fastTanh(sR * g) / std::sqrt(g); }
             sL = filt[0].process(sL); sR = filt[1].process(sR);
@@ -307,6 +368,8 @@ private:
     int note = -1, age = 0; float velocity = 1.0f, pitch = 60.0f, targetPitch = 60.0f, glideK = 1.0f; bool released = false;
     Adsr amp, mod; zw::SVF filt[2];
     float ph[2][8] {}, driftState[2][8] {}, driftTarget[2][8] {}; float driftK = 0.001f, posK = 0.003f, posSm[2] = { -1.0f, -1.0f };
+    float vibAmt = 0.0f, vibPhase = 0.0f, vibRate = 5.2f, vibOnsetK = 0.0001f, breathF[2] = { 1000.0f, 2500.0f };
+    zw::SVF breathBp[2][2]; zw::OnePole breathLp[2];
     juce::Random rng;
 };
 

@@ -74,6 +74,15 @@ namespace Presets
 
         // =====================================================================================================
         // VOCAL - choirs and voices built from real vowel formants. Meditational, soulful, human.
+        // sampled real-voice tables (Vox I / II / III = 49 / 50 / 51)
+        { "Heaven Choir",       "Vocal",     { 49, 0.35f, 0.85f, 0, 0, 0.0f, 6, 0.22f, 1.0f, true }, { 50, 0.3f, 0.45f, 1, 0, -5.0f, 4, 0.2f, 1.0f, true },
+          3200.0f, 0.1f, 0, 0.15f, 0.0f, 0.15f, 0.0f, 1200.0f, 2500.0f, 0.95f, 4000.0f, 2000.0f, 2500.0f, 0.5f, 2500.0f, 0.5f, 0.95f, 0.9f, 0.5f, 0.45f, 0.2f, 0.3f, 0.65f, 0.0f, 0.85f, 0.7f, 0.75f },
+        { "Ethereal Soprano",   "Vocal",     { 51, 0.3f, 0.8f, 1, 0, 0.0f, 4, 0.18f, 1.0f, true }, { 49, 0.5f, 0.4f, 0, 7, 3.0f, 3, 0.2f, 0.9f, true },
+          4000.0f, 0.1f, 0, 0.2f, 0.0f, 0.15f, 0.0f, 1500.0f, 2500.0f, 0.95f, 4500.0f, 2500.0f, 2500.0f, 0.5f, 2500.0f, 0.55f, 1.0f, 0.95f, 0.4f, 0.35f, 0.3f, 0.35f, 0.7f, 0.0f, 0.9f, 0.75f, 0.8f },
+        { "Soul Choir",         "Vocal",     { 50, 0.4f, 0.85f, 0, 0, 0.0f, 5, 0.25f, 1.0f, true }, { 15, 0.3f, 0.4f, -1, 0, 2.0f, 2, 0.15f, 0.6f, true },
+          2800.0f, 0.12f, 0, 0.2f, 0.05f, 0.15f, 0.0f, 500.0f, 1500.0f, 0.95f, 2500.0f, 800.0f, 1500.0f, 0.5f, 1500.0f, 0.4f, 0.85f, 0.75f, 0.55f, 0.55f, 0.2f, 0.3f, 0.5f, 0.0f, 0.7f, 0.55f, 0.65f },
+        { "Breath of Light",    "Vocal",     { 49, 0.2f, 0.8f, 0, 0, 0.0f, 7, 0.3f, 1.0f, true }, { 25, 0.4f, 0.5f, 1, 0, -4.0f, 3, 0.3f, 1.0f, true },
+          2600.0f, 0.1f, 0, 0.3f, 0.0f, 0.2f, 0.0f, 2500.0f, 3000.0f, 1.0f, 6000.0f, 4000.0f, 3000.0f, 0.6f, 3000.0f, 0.55f, 1.0f, 0.95f, 0.4f, 0.4f, 0.3f, 0.5f, 0.7f, 0.0f, 0.85f, 0.85f, 0.85f },
         { "Ahh Choir",          "Vocal",     { 8, 0.3f, 0.85f, 0, 0, 0.0f, 5, 0.3f, 1.0f, true }, { 9, 0.4f, 0.5f, -1, 0, 4.0f, 3, 0.25f, 0.8f, true },
           2750.0f, 0.1f, 0, 0.15f, 0.0f, 0.20f, 0.0f, 600.0f, 1500.0f, 0.95f, 2500.0f, 1500.0f, 2000.0f, 0.5f, 2000.0f, 0.4f, 0.85f, 0.75f, 0.45f, 0.4f, 0.17f, 0.3f, 0.55f, 0.0f, 0.8f, 0.6f, 0.65f },
         { "Ooh Choir",          "Vocal",     { 9, 0.3f, 0.85f, 0, 0, 0.0f, 5, 0.3f, 1.0f, true }, { 19, 0.3f, 0.45f, 1, 0, -4.0f, 3, 0.25f, 0.9f, true },
@@ -152,6 +161,7 @@ namespace Presets
         setParam(apvts, ParamIDs::carveOn, 1.0f);
         for (int i = 0; i < nebula::kCarveBands; ++i) setParam(apvts, ParamIDs::carveBandOn(i), 0.0f);
         setParam(apvts, ParamIDs::duck, 0.0f); setParam(apvts, ParamIDs::duckRelease, 250.0f);
+        setParam(apvts, ParamIDs::vibrato, 0.0f); setParam(apvts, ParamIDs::breath, 0.0f);
         // FX page defaults
         const float eqDef[4] = { 120.0f, 500.0f, 2500.0f, 9000.0f }; const int eqTypeDef[4] = { 1, 0, 0, 2 };
         for (int i = 0; i < 4; ++i) { setParam(apvts, ParamIDs::eqOn(i), 0.0f); setParam(apvts, ParamIDs::eqType(i), float(eqTypeDef[i])); setParam(apvts, ParamIDs::eqFreq(i), eqDef[i]); setParam(apvts, ParamIDs::eqGain(i), 0.0f); setParam(apvts, ParamIDs::eqQ(i), 1.0f); }
@@ -198,7 +208,17 @@ namespace Presets
         if (n == "Last Transmission")  { band(0, 2.0f, 0.3f, 0.3f); band(1, 5.0f, 0.5f, 2.0f); zwui::setLfo(apvts, 0, 7, true, 8, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.25f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.3f);
                                         setParam(apvts, ParamIDs::echoOn, 1.0f); setParam(apvts, ParamIDs::echoDiv, 7.0f); setParam(apvts, ParamIDs::echoFb, 0.55f); setParam(apvts, ParamIDs::echoMix, 0.3f); setParam(apvts, ParamIDs::echoTone, 0.3f); setParam(apvts, ParamIDs::echoWobble, 0.35f);
                                         setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 0.0f); setParam(apvts, ParamIDs::satDrive, 0.3f); setParam(apvts, ParamIDs::satTone, 0.3f); setParam(apvts, ParamIDs::satMix, 0.6f); }
-        // ---- vocal
+        // ---- vocal: human motion on every voice preset
+        auto human = [&](float vib, float br) { setParam(apvts, ParamIDs::vibrato, vib); setParam(apvts, ParamIDs::breath, br); };
+        if (juce::String(p.category) == "Vocal" || n == "Frozen Cathedral" || n == "Pandora Dawn" || n == "Last Transmission" || n == "Choir of Glass") human(0.25f, 0.2f);
+        if (n == "Heaven Choir")       { human(0.3f, 0.3f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.3f);
+                                        setParam(apvts, ParamIDs::spacePre, 60.0f); setParam(apvts, ParamIDs::spaceLow, 150.0f); setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::glueOn, 1.0f); setParam(apvts, ParamIDs::glueDepth, 0.25f); setParam(apvts, ParamIDs::glueTime, 1.0f); }
+        if (n == "Ethereal Soprano")   { human(0.35f, 0.35f); zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.35f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.25f);
+                                        setParam(apvts, ParamIDs::spacePre, 70.0f); setParam(apvts, ParamIDs::spaceLow, 200.0f); setParam(apvts, ParamIDs::spaceShimmer, 1.0f); setParam(apvts, ParamIDs::eqOn(3), 1.0f); setParam(apvts, ParamIDs::eqGain(3), 1.5f); }
+        if (n == "Soul Choir")         { human(0.3f, 0.2f); zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.4f); zwui::setModSlot(apvts, 1, 3, 3, 0.25f);
+                                        setParam(apvts, ParamIDs::spacePre, 40.0f); setParam(apvts, ParamIDs::spaceLow, 140.0f); setParam(apvts, ParamIDs::satOn, 1.0f); setParam(apvts, ParamIDs::satType, 1.0f); setParam(apvts, ParamIDs::satDrive, 0.15f); setParam(apvts, ParamIDs::satBias, 0.2f); setParam(apvts, ParamIDs::satMix, 0.4f); }
+        if (n == "Breath of Light")    { human(0.2f, 0.5f); zwui::setLfo(apvts, 0, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.5f); zwui::setLfo(apvts, 1, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 3, 0.3f); zwui::setModSlot(apvts, 2, 2, 7, 0.25f);
+                                        setParam(apvts, ParamIDs::spacePre, 80.0f); setParam(apvts, ParamIDs::spaceLow, 180.0f); setParam(apvts, ParamIDs::spaceShimmer, 1.0f); }
         if (n == "Ahh Choir")          { zwui::setLfo(apvts, 0, 0, true, 11, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.3f); zwui::setLfo(apvts, 1, 6, true, 12, 0.1f); zwui::setModSlot(apvts, 1, 2, 2, 0.25f); setParam(apvts, ParamIDs::spacePre, 40.0f); setParam(apvts, ParamIDs::spaceLow, 150.0f);
                                         setParam(apvts, ParamIDs::eqOn(1), 1.0f); setParam(apvts, ParamIDs::eqFreq(1), 320.0f); setParam(apvts, ParamIDs::eqGain(1), -2.0f); }
         if (n == "Ooh Choir")          { zwui::setLfo(apvts, 0, 0, true, 12, 0.1f); zwui::setModSlot(apvts, 0, 1, 1, 0.35f); zwui::setLfo(apvts, 1, 6, true, 11, 0.1f); zwui::setModSlot(apvts, 1, 2, 7, 0.2f); setParam(apvts, ParamIDs::spacePre, 50.0f); setParam(apvts, ParamIDs::spaceLow, 140.0f); }

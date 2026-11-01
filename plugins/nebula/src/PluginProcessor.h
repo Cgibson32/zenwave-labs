@@ -37,6 +37,7 @@ namespace ParamIDs
     inline constexpr auto glueOn = "glueon", glueDepth = "gluedepth", glueTime = "gluetime", glueUp = "glueup", glueDown = "gluedown", glueMix = "gluemix", glueOut = "glueout";
     inline constexpr auto echoOn = "echoon", echoSync = "echosync", echoDiv = "echodiv", echoTime = "echotime", echoFb = "echofb", echoMix = "echomix", echoTone = "echotone", echoWobble = "echowobble", echoWidth = "echowidth", echoPP = "echopp";
     inline constexpr auto spaceOn = "spaceon", spacePre = "spacepre", spaceLow = "spacelow", spaceShimmer = "spaceshimmer";
+    inline constexpr auto vibrato = "vibrato", breath = "breath";
     inline constexpr auto duck = "duck";          // sidechain duck amount
     inline constexpr auto duckRelease = "duckrelease";
     inline constexpr auto volume = "volume";
@@ -45,7 +46,7 @@ namespace ParamIDs
 
 namespace ModT { enum { PosA, PosB, Cutoff, Res, Drive, LevelA, LevelB, SpaceMix, Warmth, Air, Movement, Grit, Width, Drift, Duck,
                         SatDrive, GlueDepth, EchoFb, EchoMix, EchoTone, Eq1Gain, Eq2Gain, Eq3Gain, Eq4Gain,
-                        SatTone, EchoWobble, SpaceSize, SpaceDecay, SpaceDark, Count }; }
+                        SatTone, EchoWobble, SpaceSize, SpaceDecay, SpaceDark, Vibrato, Breath, Count }; }
 inline const std::vector<zwui::ModTarget>& nebulaModTargets()
 {
     static const std::vector<zwui::ModTarget> t {
@@ -54,7 +55,8 @@ inline const std::vector<zwui::ModTarget>& nebulaModTargets()
         { ParamIDs::mMovement, "Movement" }, { ParamIDs::mGrit, "Grit" }, { ParamIDs::mWidth, "Width" }, { ParamIDs::drift, "Drift" }, { ParamIDs::duck, "Duck" },
         { ParamIDs::satDrive, "Sat Drive" }, { ParamIDs::glueDepth, "Glue Depth" }, { ParamIDs::echoFb, "Echo Feedback" }, { ParamIDs::echoMix, "Echo Mix" }, { ParamIDs::echoTone, "Echo Tone" },
         { "eq1gain", "EQ 1 Gain" }, { "eq2gain", "EQ 2 Gain" }, { "eq3gain", "EQ 3 Gain" }, { "eq4gain", "EQ 4 Gain" },
-        { ParamIDs::satTone, "Sat Tone" }, { ParamIDs::echoWobble, "Echo Wobble" }, { ParamIDs::spaceSize, "Space Size" }, { ParamIDs::spaceDecay, "Space Decay" }, { ParamIDs::spaceDark, "Space Dark" } };
+        { ParamIDs::satTone, "Sat Tone" }, { ParamIDs::echoWobble, "Echo Wobble" }, { ParamIDs::spaceSize, "Space Size" }, { ParamIDs::spaceDecay, "Space Decay" }, { ParamIDs::spaceDark, "Space Dark" },
+        { ParamIDs::vibrato, "Vibrato" }, { ParamIDs::breath, "Breath" } };
     return t;
 }
 

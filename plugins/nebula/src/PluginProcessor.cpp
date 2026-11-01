@@ -163,6 +163,7 @@ APVTS::ParameterLayout NebulaAudioProcessor::createLayout()
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::spacePre, 1 }, "Space Pre-Delay", Rng{ 0.0f, 250.0f, 0.1f, 0.5f }, 0.0f, msAttr));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::spaceLow, 1 }, "Space Low Cut", Rng{ 20.0f, 800.0f, 0.1f, 0.4f }, 90.0f, hzAttr));
     params.push_back(std::make_unique<B>(juce::ParameterID{ ParamIDs::spaceShimmer, 1 }, "Space Shimmer", false));
+    params.push_back(pct(ParamIDs::vibrato, "Vibrato", 0.0f)); params.push_back(pct(ParamIDs::breath, "Breath", 0.0f));
     params.push_back(pct(ParamIDs::duck, "Duck", 0.0f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::duckRelease, 1 }, "Duck Release", Rng{ 20.0f, 1500.0f, 1.0f, 0.5f }, 250.0f, msAttr));
     params.push_back(std::make_unique<P>(juce::ParameterID{ ParamIDs::volume, 1 }, "Volume", Rng{ -36.0f, 6.0f, 0.1f }, -6.0f,
@@ -243,6 +244,7 @@ void NebulaAudioProcessor::updateVoiceParams()
     vp.ampA = pAmp[0]->load() * atkM; vp.ampD = pAmp[1]->load(); vp.ampS = pAmp[2]->load(); vp.ampR = pAmp[3]->load() * relM;
     vp.modA = pModEnv[0]->load(); vp.modD = pModEnv[1]->load(); vp.modS = pModEnv[2]->load(); vp.modR = pModEnv[3]->load();
     vp.glideMs = pGlide->load();
+    vp.vibrato = juce::jlimit(0.0f, 1.0f, M(ModT::Vibrato)); vp.breath = juce::jlimit(0.0f, 1.0f, M(ModT::Breath) + air * 0.25f);
     for (auto& v : voices) v.setParams(vp);
     reverb.setSize(juce::jlimit(0.0f, 1.0f, M(ModT::SpaceSize))); reverb.setDecay(juce::jlimit(0.0f, 1.0f, M(ModT::SpaceDecay)));
     reverb.setDamping(zw::lerp(12000.0f, 2500.0f, juce::jlimit(0.0f, 1.0f, M(ModT::SpaceDark))) * (0.7f + 0.6f * air)); reverb.setDiffusion(0.7f); reverb.setModDepth(0.3f + 0.4f * movement);

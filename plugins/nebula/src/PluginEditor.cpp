@@ -15,7 +15,7 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
         auto& u = osc[o];
         addAndMakeVisible(u.table);
         {
-            const auto& names = nebula::tableNames(); const auto& secs = nebula::tableSections();
+            const auto& names = nebula::tableNames(); const auto& secs = nebula::allTableSections();
             for (int i = 0; i < names.size(); ++i)
             {
                 for (const auto& sec : secs) if (sec.first == i) u.table.addSectionHeading(sec.second);
@@ -82,6 +82,8 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
     glueUp.init(*this, s, ParamIDs::glueUp, "UP", false, false); glueDown.init(*this, s, ParamIDs::glueDown, "DOWN", false, false); glueOut.init(*this, s, ParamIDs::glueOut, "OUT", false, false);
     echoTime.init(*this, s, ParamIDs::echoTime, "TIME", false, false); echoFb.init(*this, s, ParamIDs::echoFb, "FDBK", false, false); echoMix.init(*this, s, ParamIDs::echoMix, "MIX", false, false);
     echoTone.init(*this, s, ParamIDs::echoTone, "TONE", false, false); echoWobble.init(*this, s, ParamIDs::echoWobble, "WOBBLE", false, false); echoWidth.init(*this, s, ParamIDs::echoWidth, "WIDTH", false, false);
+    vibrato.init(*this, s, ParamIDs::vibrato, "VIBRATO", false, false); breath.init(*this, s, ParamIDs::breath, "BREATH", false, false);
+    vibrato.slider.setTooltip("Human vibrato: 5-6 Hz, a different rate per voice, eases in after the attack"); breath.slider.setTooltip("Breath: voice-shaped noise under the note (AIR adds some too)");
     spaceMix.init(*this, s, ParamIDs::spaceMix, "MIX", false, false); spacePre.init(*this, s, ParamIDs::spacePre, "PRE", false, false); spaceLow.init(*this, s, ParamIDs::spaceLow, "LO CUT", false, false);
 
     addAndMakeVisible(powerButton); powerButton.getProperties().set("round", true); powerButton.setTooltip("Power: smooth output mute");
@@ -100,7 +102,7 @@ NebulaAudioProcessorEditor::NebulaAudioProcessorEditor(NebulaAudioProcessor& p)
 
     allKnobs = { &cutoff, &res, &envAmt, &keyTrack, &drive, &spaceSize, &spaceDecay, &spaceDark, &duck, &duckRel, &glide, &drift, &volume,
                  &satDrive, &satTone, &satMix, &satBias, &satLow, &satOut, &glueDepth, &glueTime, &glueMix, &glueUp, &glueDown, &glueOut,
-                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ };
+                 &echoTime, &echoFb, &echoMix, &echoTone, &echoWobble, &echoWidth, &spaceMix, &spacePre, &spaceLow, &eqFreq, &eqGain, &eqQ, &vibrato, &breath };
     for (int o = 0; o < 2; ++o) for (auto* k : { &osc[o].position, &osc[o].level, &osc[o].octave, &osc[o].semis, &osc[o].fine, &osc[o].unison, &osc[o].spread, &osc[o].width }) allKnobs.push_back(k);
     for (int i = 0; i < 4; ++i) { allKnobs.push_back(&ampK[i]); allKnobs.push_back(&modK[i]); }
     for (int i = 0; i < 8; ++i) allKnobs.push_back(&macro[i]);
@@ -130,7 +132,7 @@ void NebulaAudioProcessorEditor::setPage(int p)
     const bool voice = p == 0;
     for (auto* c : std::initializer_list<juce::Component*>{ &carveButton, &cutoff.slider, &cutoff.label, &res.slider, &res.label, &envAmt.slider, &envAmt.label, &keyTrack.slider, &keyTrack.label, &drive.slider, &drive.label, &filterModeBox,
                                                             &duck.slider, &duck.label, &duckRel.slider, &duckRel.label,
-                                                            &glide.slider, &glide.label, &drift.slider, &drift.label, &volume.slider, &volume.label })
+                                                            &glide.slider, &glide.label, &drift.slider, &drift.label, &volume.slider, &volume.label, &vibrato.slider, &vibrato.label, &breath.slider, &breath.label })
         c->setVisible(voice);
     for (auto* k : { &spaceSize, &spaceDecay, &spaceDark }) { k->slider.setVisible(! voice); k->label.setVisible(! voice); }
     for (int i = 0; i < 4; ++i) { ampK[i].slider.setVisible(voice); ampK[i].label.setVisible(voice); modK[i].slider.setVisible(voice); modK[i].label.setVisible(voice); eqSel[i].setVisible(! voice); }
@@ -268,9 +270,9 @@ void NebulaAudioProcessorEditor::paint(juce::Graphics& g)
         g.drawText("AMP", juce::Rectangle<float>(548 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
         g.drawText("MOD", juce::Rectangle<float>(784 * s, 452 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
         g.drawText(juce::String("DUCK (SC)") + (processor.sidechainPresent.load() ? "" : "  -  no input"), juce::Rectangle<float>(548 * s, 566 * s, 140 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText("VOICE", juce::Rectangle<float>(712 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.drawText("OUTPUT", juce::Rectangle<float>(876 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
-        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(774 * s), 452 * s, 552 * s); g.drawVerticalLine(int(700 * s), 566 * s, 684 * s); g.drawVerticalLine(int(864 * s), 566 * s, 684 * s);
+        g.drawText("VOICE  -  HUMAN", juce::Rectangle<float>(708 * s, 566 * s, 120 * s, 12 * s), juce::Justification::centredLeft);
+        g.drawText("OUT", juce::Rectangle<float>(936 * s, 566 * s, 60 * s, 12 * s), juce::Justification::centredLeft);
+        g.setColour(juce::Colours::white.withAlpha(0.06f)); g.drawVerticalLine(int(774 * s), 452 * s, 552 * s); g.drawVerticalLine(int(698 * s), 566 * s, 684 * s); g.drawVerticalLine(int(926 * s), 566 * s, 684 * s);
         // duck meter
         { const float d = processor.duckVis.load(); g.setColour(zwui::Palette::dim.withAlpha(0.3f)); g.fillRoundedRectangle(548 * s, 666 * s, 136 * s, 4 * s, 2 * s); g.setColour(lnf.accent2); g.fillRoundedRectangle(548 * s, 666 * s, 136 * s * juce::jlimit(0.0f, 1.0f, d), 4 * s, 2 * s); }
     }
@@ -358,8 +360,9 @@ void NebulaAudioProcessorEditor::resized()
     filterModeBox.setBounds(S(40), S(504), S(80), S(22));
     for (int i = 0; i < 4; ++i) { ampK[i].layout(S(548 + i * 56), S(480), S(54), S(54), S(10)); modK[i].layout(S(784 + i * 56), S(480), S(54), S(54), S(10)); }
     duck.layout(S(548), S(596), S(54), S(54), S(10)); duckRel.layout(S(612), S(596), S(54), S(54), S(10));
-    glide.layout(S(712), S(596), S(54), S(54), S(10)); drift.layout(S(776), S(596), S(54), S(54), S(10));
-    volume.layout(S(900), S(590), S(64), S(64), S(10));
+    glide.layout(S(708), S(596), S(50), S(50), S(10)); drift.layout(S(762), S(596), S(50), S(50), S(10));
+    vibrato.layout(S(816), S(596), S(50), S(50), S(10)); breath.layout(S(870), S(596), S(50), S(50), S(10));
+    volume.layout(S(940), S(590), S(64), S(64), S(10));
     modPanel.setBounds(S(22), S(704), S(996), S(170));
     modPanel.layoutScaled(996.0f * s / 836.0f);
     for (int i = 0; i < 8; ++i) macro[i].layout(S(118 + i * 110), S(908), S(96), S(68), S(12));

@@ -34,6 +34,7 @@ private:
     zwui::Knob ampK[4], modK[4];
     zwui::Knob spaceSize, spaceDecay, spaceDark, duck, duckRel, glide, drift, volume;
     zwui::Knob macro[8];
+    zwui::Knob vibrato, breath;
     // ---- FX page ----
     int page = 0;                                   // 0 = VOICE, 1 = FX
     juce::TextButton voiceTab { "VOICE" }, fxTab { "FX" };
